@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36" width="36" height="36">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c47a3a"/>
+      <stop offset="100%" stop-color="#6b3f1e"/>
+    </linearGradient>
+  </defs>
+  <rect width="36" height="36" rx="9" fill="url(#g)"/>
+  <polyline
+    points="7,10 18,26 29,10"
+    stroke="white"
+    stroke-width="4.5"
+    stroke-linecap="square"
+    stroke-linejoin="miter"
+    stroke-miterlimit="20"
+    fill="none"
+  />
+</svg>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  X, Clock, Users, CheckCircle, AlertTriangle, ExternalLink,
+  X, Clock, CheckCircle, AlertTriangle, ExternalLink,
   Send, ThumbsUp, ThumbsDown, AlertCircle, Loader2, ChevronRight
 } from "lucide-react";
 import {
@@ -25,30 +25,41 @@ const MOCK_SUBMISSION: Submission = {
   submittedAt: 0,
 };
 
-// ── Status badge colours — same palette as TaskCard ───────────────────────────
+// Status maps 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   [TaskStatus.Open]:       "Open",
   [TaskStatus.InProgress]: "In Progress",
   [TaskStatus.Completed]:  "Completed",
   [TaskStatus.Cancelled]:  "Cancelled",
   [TaskStatus.Disputed]:   "Disputed",
+  [TaskStatus.Extended]:   "Extended",
+  [TaskStatus.Past]:       "Past",
+  [TaskStatus.Closed]:     "Closed",
 };
+
 const STATUS_BADGE: Record<TaskStatus, { bg: string; text: string; dot: string }> = {
   [TaskStatus.Open]:       { bg:"bg-[var(--brown-100)]",         text:"text-[var(--brown-700)]",  dot:"bg-[var(--brown-500)]"  },
   [TaskStatus.InProgress]: { bg:"bg-[var(--cream-300)]",         text:"text-[var(--brown-800)]",  dot:"bg-[var(--brown-400)]"  },
   [TaskStatus.Completed]:  { bg:"bg-[rgba(74,124,89,0.12)]",     text:"text-[var(--success)]",    dot:"bg-[var(--success)]"    },
   [TaskStatus.Cancelled]:  { bg:"bg-[var(--brown-50)]",          text:"text-[var(--text-muted)]", dot:"bg-[var(--brown-300)]"  },
   [TaskStatus.Disputed]:   { bg:"bg-[rgba(139,58,42,0.12)]",     text:"text-[var(--error)]",      dot:"bg-[var(--error)]"      },
+  [TaskStatus.Extended]:   { bg:"bg-[var(--cream-200)]",         text:"text-[var(--brown-600)]",  dot:"bg-[var(--brown-400)]"  },
+  [TaskStatus.Past]:       { bg:"bg-[var(--bg-secondary)]",      text:"text-[var(--text-muted)]", dot:"bg-[var(--brown-300)]"  },
+  [TaskStatus.Closed]:     { bg:"bg-[var(--brown-50)]",          text:"text-[var(--text-muted)]", dot:"bg-[var(--brown-200)]"  },
 };
+
 const STATUS_BAR: Record<TaskStatus, string> = {
   [TaskStatus.Open]:       "from-[var(--brown-400)] to-[var(--brown-300)]",
   [TaskStatus.InProgress]: "from-[var(--brown-500)] to-[var(--brown-400)]",
   [TaskStatus.Completed]:  "from-[var(--success)] to-[rgba(74,124,89,0.6)]",
   [TaskStatus.Cancelled]:  "from-[var(--brown-200)] to-[var(--brown-100)]",
   [TaskStatus.Disputed]:   "from-[var(--error)] to-[rgba(139,58,42,0.6)]",
+  [TaskStatus.Extended]:   "from-[var(--brown-300)] to-[var(--cream-300)]",
+  [TaskStatus.Past]:       "from-[var(--brown-200)] to-[var(--brown-100)]",
+  [TaskStatus.Closed]:     "from-[var(--brown-100)] to-[var(--brown-50)]",
 };
 
-// ── Info row ──────────────────────────────────────────────────────────────────
+// Info row
 function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex items-start justify-between gap-6 px-4 py-3 border-b border-[var(--border)] last:border-b-0">
@@ -68,9 +79,9 @@ function InfoRow({ label, value, mono }: { label: string; value: string; mono?: 
 function ProofPanel({ task, submission, onSubmit }: {
   task: Task; submission: Submission; onSubmit: (proof: string) => Promise<void>;
 }) {
-  const [proof, setProof]   = useState(submission.proofData || "");
+  const [proof, setProof]     = useState(submission.proofData || "");
   const [loading, setLoading] = useState(false);
-  const [done, setDone]     = useState(false);
+  const [done, setDone]       = useState(false);
 
   const handleSubmit = async () => {
     if (!proof.trim()) return;
@@ -213,7 +224,7 @@ function ProofInput({ task, proof, setProof, onSubmit, loading, done }: {
   );
 }
 
-// ── Poster actions ────────────────────────────────────────────────────────────
+// Poster actions 
 function PosterActions({ taskId, workerAddress, submissionStatus }: {
   taskId: number; workerAddress: string; submissionStatus: SubmissionStatus;
 }) {
@@ -286,7 +297,7 @@ function PosterActions({ taskId, workerAddress, submissionStatus }: {
   );
 }
 
-// ── Main drawer ───────────────────────────────────────────────────────────────
+// Main drawer 
 interface TaskDetailDrawerProps {
   task: Task | null;
   onClose: () => void;
@@ -294,10 +305,10 @@ interface TaskDetailDrawerProps {
 }
 
 export default function TaskDetailDrawer({ task, onClose, viewerRole = "worker" }: TaskDetailDrawerProps) {
-  const [joining, setJoining]     = useState(false);
-  const [joined, setJoined]       = useState(false);
+  const [joining, setJoining]       = useState(false);
+  const [joined, setJoined]         = useState(false);
   const [submission, setSubmission] = useState<Submission>(MOCK_SUBMISSION);
-  const [activeTab, setActiveTab] = useState<"details"|"proof">("details");
+  const [activeTab, setActiveTab]   = useState<"details"|"proof">("details");
 
   const handleJoin = async () => {
     setJoining(true);
@@ -314,10 +325,9 @@ export default function TaskDetailDrawer({ task, onClose, viewerRole = "worker" 
 
   if (!task) return null;
 
-  // Fix: pass task object, not individual args
   const joinable = canJoin(task);
   const pct      = capacityPercent(task);
-  const badge    = STATUS_BADGE[task.status];
+  const badge    = STATUS_BADGE[task.status] ?? STATUS_BADGE[TaskStatus.Open];
 
   const CATEGORY_EMOJI: Record<string, string> = {
     "Surveys & Research":"📋","Photo Verification":"📸","Content & Translation":"✍️",
@@ -332,14 +342,13 @@ export default function TaskDetailDrawer({ task, onClose, viewerRole = "worker" 
       <div className="relative z-10 w-full sm:max-w-lg h-full sm:h-auto sm:max-h-[90vh] flex flex-col bg-[var(--bg-card)] sm:rounded-2xl border-0 sm:border border-[var(--border)] shadow-2xl overflow-hidden">
 
         {/* Status accent bar */}
-        <div className={`h-1 w-full bg-gradient-to-r ${STATUS_BAR[task.status]}`} />
+        <div className={`h-1 w-full bg-gradient-to-r ${STATUS_BAR[task.status] ?? STATUS_BAR[TaskStatus.Open]}`} />
 
         {/* Header */}
         <div className="flex items-start gap-3 px-5 py-4 border-b border-[var(--border)] shrink-0">
           <span className="text-2xl mt-0.5">{CATEGORY_EMOJI[task.category] ?? "📦"}</span>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              {/* Status badge — consistent with TaskCard */}
               <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.bg} ${badge.text}`}
                 style={{ fontFamily:"var(--font-nunito),sans-serif" }}>
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${badge.dot}`} />
@@ -403,7 +412,6 @@ export default function TaskDetailDrawer({ task, onClose, viewerRole = "worker" 
         <div className="flex-1 overflow-y-auto min-h-0 px-5 py-5 space-y-5">
           {activeTab === "details" ? (
             <>
-              {/* Description */}
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)] mb-2"
                   style={{ fontFamily:"var(--font-nunito),sans-serif" }}>Description</p>
@@ -413,7 +421,6 @@ export default function TaskDetailDrawer({ task, onClose, viewerRole = "worker" 
                 </p>
               </div>
 
-              {/* Progress */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs font-bold uppercase tracking-wide text-[var(--text-muted)]"
@@ -429,18 +436,16 @@ export default function TaskDetailDrawer({ task, onClose, viewerRole = "worker" 
                 </div>
               </div>
 
-              {/* Metadata table */}
               <div className="rounded-xl border border-[var(--border)] overflow-hidden">
-                <InfoRow label="Task ID"     value={`#${task.id.toString()}`} />
-                <InfoRow label="Category"    value={task.category} />
-                <InfoRow label="Posted by"   value={shortAddress(task.poster)} mono />
+                <InfoRow label="Task ID"      value={`#${task.id.toString()}`} />
+                <InfoRow label="Category"     value={task.category} />
+                <InfoRow label="Posted by"    value={shortAddress(task.poster)} mono />
                 <InfoRow label="Verification" value={VERIFICATION_METHOD_LABEL[task.verificationMethod]} />
                 {task.verificationRef && <InfoRow label="Reference" value={task.verificationRef} mono />}
                 {task.isPaid && <InfoRow label="Payment Token" value={shortAddress(task.paymentToken)} mono />}
-                <InfoRow label="Deadline"    value={formatDate(task.deadline)} />
+                <InfoRow label="Deadline"     value={formatDate(task.deadline)} />
               </div>
 
-              {/* Verification link */}
               {task.verificationRef && task.verificationMethod !== VerificationMethod.OnChainText && (
                 <a href={task.verificationRef.startsWith("http") ? task.verificationRef : `mailto:${task.verificationRef}`}
                   target="_blank" rel="noopener noreferrer"
@@ -482,7 +487,7 @@ export default function TaskDetailDrawer({ task, onClose, viewerRole = "worker" 
                       </p>
                       <button onClick={() => setActiveTab("details")}
                         className="text-xs text-[var(--brown-400)] underline" style={{ fontFamily:"var(--font-nunito),sans-serif" }}>
-                        ← Back to task details
+                        Back to task details
                       </button>
                     </div>
                   )}

@@ -1,6 +1,6 @@
 import { TaskFormValues, VerificationMethod } from "@/types/contract";
 
-export const CELO_G_DOLLAR = "0x2Ef7d311d08bf6C9990c46D07c86eb3c9ADd7Cb3";
+export const CELO_G_DOLLAR = "0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A";
 export const PLATFORM_FEE_BPS = 600;
 export const GOOD_DOLLAR_DECIMALS = 18;
 

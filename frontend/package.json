@@ -3,15 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@goodsdks/citizen-sdk": "^1.2.5",
+    "@goodsdks/identity-sdk": "^1.0.5",
     "@reown/appkit": "^1.8.20",
     "@reown/appkit-adapter-wagmi": "^1.8.20",
     "@tanstack/react-query": "^5.101.0",
+    "@wagmi/connectors": "^8.0.15",
+    "@wagmi/core": "^3.5.0",
     "lucide-react": "^1.17.0",
     "next": "16.2.7",
     "react": "19.2.4",

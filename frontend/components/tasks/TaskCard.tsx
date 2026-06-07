@@ -1,12 +1,13 @@
 "use client";
 
-import { Clock, Users, CheckCircle, AlertTriangle, RefreshCw, X } from "lucide-react";
+import { Clock, Users, CheckCircle, AlertTriangle, RefreshCw, X, ShieldCheck } from "lucide-react";
 import { Task, TaskStatus, VERIFICATION_METHOD_LABEL } from "@/types/contract";
 import {
   formatDeadline, formatGDollar, capacityPercent,
   spotsLeft, canJoin, shortAddress, isExpired, effectiveStatusLabel,
 } from "@/lib/taskUtils";
 import { useAccount } from "wagmi";
+import { useRouter } from "next/navigation";
 import { useCloseTask } from "@/hooks/useCloseTask";
 import { useSettlePastTask } from "@/hooks/useSettlePastTask";
 import { useJoinTask } from "@/hooks/useJoinTask";
@@ -16,7 +17,7 @@ interface TaskCardProps {
   onView: (task: Task) => void;
 }
 
-// Status badge
+// Status badge — all 8 statuses, brown/earth palette, no dark: classes
 const STATUS_BADGE: Record<TaskStatus, { bg: string; text: string; dot: string }> = {
   [TaskStatus.Open]:       { bg: "bg-[var(--brown-100)]",           text: "text-[var(--brown-700)]",  dot: "bg-[var(--brown-500)]"  },
   [TaskStatus.InProgress]: { bg: "bg-[var(--cream-300)]",           text: "text-[var(--brown-800)]",  dot: "bg-[var(--brown-400)]"  },
@@ -53,6 +54,7 @@ const CATEGORY_EMOJI: Record<string, string> = {
 
 export default function TaskCard({ task, onView }: TaskCardProps) {
   const { address } = useAccount();
+  const router = useRouter();
   const pct      = capacityPercent(task);
   const spots    = spotsLeft(task);
   const joinable = canJoin(task);
@@ -220,9 +222,9 @@ export default function TaskCard({ task, onView }: TaskCardProps) {
           </div>
         </div>
 
-        {/* Worker — Join button */}
-        {joinable && address && !isPoster && (
-          <div onClick={(e) => e.stopPropagation()}>
+        {/* Worker — Join button or Verify prompt */}
+        {address && !isPoster && joinable && (
+          <div onClick={(e) => e.stopPropagation()} className="flex flex-col gap-2">
             <button
               onClick={handleJoin}
               disabled={isJoining}
@@ -231,6 +233,14 @@ export default function TaskCard({ task, onView }: TaskCardProps) {
             >
               <Users className="w-3.5 h-3.5" />
               {isJoining ? "Joining…" : "Join Task"}
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); router.push("/verify"); }}
+              className="w-full flex items-center justify-center gap-1.5 text-[10px] font-semibold px-3 py-1.5 rounded-xl border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] transition-colors"
+              style={{ fontFamily: "var(--font-nunito),sans-serif" }}
+            >
+              <ShieldCheck className="w-3 h-3" />
+              Not verified? Verify with GoodDollar
             </button>
           </div>
         )}

@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
-
+import ContextProvider from "@/context";
+import { headers } from "next/headers";
+import { WalletGuard } from "@/components/auth/WalletGuard";
 
 export const metadata: Metadata = {
   title: "Verko — Verified Micro-Task Marketplace",
@@ -10,7 +12,8 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
- 
+  const headersObj = await headers();
+  const cookies = headersObj.get("cookie");
 
   return (
     <html lang="en" suppressHydrationWarning>
@@ -26,13 +29,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="apple-touch-icon" href="/favicon.svg" />
       </head>
       <body suppressHydrationWarning>
-        
+        <ContextProvider cookies={cookies}>
+          <WalletGuard>
           <div className="min-h-screen flex flex-col">
             <Navbar />
             <main className="flex-1">{children}</main>
             <Footer />
           </div>
-          
+          </WalletGuard>
+        </ContextProvider>
       </body>
     </html>
   );

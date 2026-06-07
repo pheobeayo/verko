@@ -181,7 +181,7 @@ export default function TasksPage() {
         <StatCard icon={<Zap        className="w-4 h-4" />} value={openCount}    label="Open tasks"     color="#c47a3a" />
         <StatCard icon={<TrendingUp className="w-4 h-4" />} value={paidCount}    label="Paid tasks"     color="#a78bfa" />
         <StatCard icon={<Users      className="w-4 h-4" />} value={tasks.length} label="Total on-chain" color="#34d399" />
-        <StatCard icon={<Globe      className="w-4 h-4" />} value="Celo Sepolia" label="Network"        color="#fbbf24" />
+        <StatCard icon={<Globe      className="w-4 h-4" />} value="Celo" label="Network"        color="#fbbf24" />
       </div>
 
       {/* Filter bar + Post button */}

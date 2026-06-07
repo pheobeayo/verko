@@ -9,7 +9,7 @@ export type IdentityStatus = "loading" | "verified" | "not_verified" | "error";
 
 export function useGoodDollarIdentity() {
   const { address } = useAccount();
-  const publicClient  = usePublicClient();
+  const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
   const identitySDKFromHook = useIdentitySDK("production");
 
@@ -19,12 +19,12 @@ export function useGoodDollarIdentity() {
     return new (IdentitySDK as any)(publicClient, walletClient, "production");
   }, [identitySDKFromHook, publicClient, walletClient]);
 
-  const [status, setStatus]               = useState<IdentityStatus>("loading");
-  const [fvLink, setFvLink]               = useState<string | null>(null);
-  const [isVerifying, setIsVerifying]     = useState(false);
+  const [status, setStatus]                     = useState<IdentityStatus>("loading");
+  const [fvLink, setFvLink]                     = useState<string | null>(null);
+  const [isVerifying, setIsVerifying]           = useState(false);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
 
-  // Check if wallet is GoodDollar whitelisted 
+  // Check GoodDollar whitelist status
   const checkVerification = async () => {
     if (!address || !publicClient || !identitySDK || !walletClient?.account?.address) {
       setStatus("not_verified");
@@ -58,13 +58,10 @@ export function useGoodDollarIdentity() {
   // Generate GoodDollar face verification link 
   const generateFVLink = async () => {
     if (!address || !publicClient || !identitySDK || !walletClient || isGeneratingLink) return;
-
     try {
       setIsGeneratingLink(true);
-
       const idSDK = new (IdentitySDK as any)(publicClient, walletClient, "production");
 
-      // generateFVLink(popupMode, callbackUrl, chainId)
       const linkResult = await idSDK.generateFVLink(
         false,
         `${window.location.origin}/verify`,
@@ -95,7 +92,7 @@ export function useGoodDollarIdentity() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address, !!publicClient, !!identitySDK, !!walletClient?.account?.address]);
 
-  // Generate link when verification flow starts
+  // Generate link when verification flow starts 
   useEffect(() => {
     if (isVerifying && !fvLink && !isGeneratingLink) {
       generateFVLink();
@@ -103,7 +100,7 @@ export function useGoodDollarIdentity() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVerifying, !!fvLink, isGeneratingLink]);
 
-  // Poll every 5 seconds while verifying 
+  // Poll every 5s while verifying 
   useEffect(() => {
     if (!isVerifying || status === "verified") return;
     const interval = setInterval(checkVerification, 5000);

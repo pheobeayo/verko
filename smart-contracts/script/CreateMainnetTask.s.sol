@@ -23,7 +23,7 @@ interface ITaskEscrow {
 contract CreateMainnetTask is Script {
 
     // Mainnet deployed addresses
-    address constant TASK_ESCROW = 0x851ab8d8428C574B5BA6473aAEee02c11FD6064B;
+    address constant TASK_ESCROW = 0xB4429d77543A6909449a48CAB1903f909d32d44C;
 
     // VerificationMethod enum values
     uint8 constant OnChainText = 0;

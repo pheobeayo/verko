@@ -6,18 +6,19 @@ import {
   formatDeadline, formatGDollar, capacityPercent,
   spotsLeft, canJoin, shortAddress, isExpired, effectiveStatusLabel,
 } from "@/lib/taskUtils";
-import { useAccount } from "wagmi";
+import { useAccount, useReadContract } from "wagmi";
 import { useRouter } from "next/navigation";
 import { useCloseTask } from "@/hooks/useCloseTask";
 import { useSettlePastTask } from "@/hooks/useSettlePastTask";
 import { useJoinTask } from "@/hooks/useJoinTask";
+import abi from "@/constant/abi.json";
+import { CONTRACT_ADDRESSES } from "@/constant/contract/address";
 
 interface TaskCardProps {
   task: Task;
   onView: (task: Task) => void;
 }
 
-// Status badge — all 8 statuses, brown/earth palette, no dark: classes
 const STATUS_BADGE: Record<TaskStatus, { bg: string; text: string; dot: string }> = {
   [TaskStatus.Open]:       { bg: "bg-[var(--brown-100)]",           text: "text-[var(--brown-700)]",  dot: "bg-[var(--brown-500)]"  },
   [TaskStatus.InProgress]: { bg: "bg-[var(--cream-300)]",           text: "text-[var(--brown-800)]",  dot: "bg-[var(--brown-400)]"  },
@@ -29,7 +30,6 @@ const STATUS_BADGE: Record<TaskStatus, { bg: string; text: string; dot: string }
   [TaskStatus.Closed]:     { bg: "bg-[var(--brown-50)]",            text: "text-[var(--text-muted)]", dot: "bg-[var(--brown-200)]"  },
 };
 
-// Top accent bar gradient per status
 const STATUS_BAR: Record<TaskStatus, string> = {
   [TaskStatus.Open]:       "from-[var(--brown-400)] to-[var(--brown-300)]",
   [TaskStatus.InProgress]: "from-[var(--brown-500)] to-[var(--brown-400)]",
@@ -54,12 +54,13 @@ const CATEGORY_EMOJI: Record<string, string> = {
 
 export default function TaskCard({ task, onView }: TaskCardProps) {
   const { address } = useAccount();
-  const router = useRouter();
-  const pct      = capacityPercent(task);
-  const spots    = spotsLeft(task);
-  const joinable = canJoin(task);
-  const expired  = isExpired(task.deadline);
-  const badge    = STATUS_BADGE[task.status] ?? STATUS_BADGE[TaskStatus.Open];
+  const router      = useRouter();
+
+  const pct         = capacityPercent(task);
+  const spots       = spotsLeft(task);
+  const joinable    = canJoin(task);
+  const expired     = isExpired(task.deadline);
+  const badge       = STATUS_BADGE[task.status] ?? STATUS_BADGE[TaskStatus.Open];
   const statusLabel = effectiveStatusLabel(task);
 
   const isPast = (
@@ -72,9 +73,18 @@ export default function TaskCard({ task, onView }: TaskCardProps) {
 
   const isPoster = !!address && address.toLowerCase() === task.poster.toLowerCase();
 
-  const { closeTask,      isWriting: isClosing   } = useCloseTask();
-  const { settlePastTask, isWriting: isSettling  } = useSettlePastTask();
-  const { joinTask,       isWriting: isJoining   } = useJoinTask();
+  // Check if wallet is GoodDollar verified
+  const { data: isGDVerified } = useReadContract({
+    address: CONTRACT_ADDRESSES.taskContract as `0x${string}`,
+    abi: abi as any,
+    functionName: "isWorkerVerified",
+    args: [address],
+    query: { enabled: !!address },
+  });
+
+  const { closeTask,      isWriting: isClosing  } = useCloseTask();
+  const { settlePastTask, isWriting: isSettling } = useSettlePastTask();
+  const { joinTask,       isWriting: isJoining  } = useJoinTask();
 
   const handleJoin = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -122,10 +132,7 @@ export default function TaskCard({ task, onView }: TaskCardProps) {
               >
                 {formatGDollar(task.bountyPerWorker)}
               </div>
-              <div
-                className="text-[10px] text-[var(--text-muted)]"
-                style={{ fontFamily: "var(--font-roboto),sans-serif" }}
-              >
+              <div className="text-[10px] text-[var(--text-muted)]" style={{ fontFamily: "var(--font-roboto),sans-serif" }}>
                 per worker
               </div>
             </div>
@@ -141,7 +148,7 @@ export default function TaskCard({ task, onView }: TaskCardProps) {
 
         {/* Title */}
         <h3
-          className="text-sm font-bold text-[var(--text-heading)] line-clamp-2 transition-colors"
+          className="text-sm font-bold text-[var(--text-heading)] line-clamp-2"
           style={{ fontFamily: "var(--font-nunito),sans-serif" }}
         >
           {task.title}
@@ -176,18 +183,12 @@ export default function TaskCard({ task, onView }: TaskCardProps) {
         {/* Capacity bar */}
         <div>
           <div className="flex items-center justify-between mb-1">
-            <span
-              className="text-[10px] text-[var(--text-muted)]"
-              style={{ fontFamily: "var(--font-roboto),sans-serif" }}
-            >
+            <span className="text-[10px] text-[var(--text-muted)]" style={{ fontFamily: "var(--font-roboto),sans-serif" }}>
               <Users className="w-3 h-3 inline mr-1" />
               {task.currentWorkers}/{task.maxWorkers} workers
             </span>
             {joinable && (
-              <span
-                className="text-[10px] font-medium text-[var(--success)]"
-                style={{ fontFamily: "var(--font-nunito),sans-serif" }}
-              >
+              <span className="text-[10px] font-medium text-[var(--success)]" style={{ fontFamily: "var(--font-nunito),sans-serif" }}>
                 {spots} spot{spots !== 1 ? "s" : ""} left
               </span>
             )}
@@ -213,39 +214,41 @@ export default function TaskCard({ task, onView }: TaskCardProps) {
             {expired ? <AlertTriangle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
             {formatDeadline(task.deadline)}
           </div>
-          <div
-            className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]"
-            style={{ fontFamily: "var(--font-roboto),sans-serif" }}
-          >
+          <div className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]" style={{ fontFamily: "var(--font-roboto),sans-serif" }}>
             <CheckCircle className="w-3 h-3" />
             {task.approvedCount} approved
           </div>
         </div>
 
-        {/* Worker — Join button or Verify prompt */}
+        {/* Worker actions */}
         {address && !isPoster && joinable && (
           <div onClick={(e) => e.stopPropagation()} className="flex flex-col gap-2">
-            <button
-              onClick={handleJoin}
-              disabled={isJoining}
-              className="w-full flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-[var(--brown-500)] text-[var(--cream-100)] hover:bg-[var(--brown-600)] transition-colors disabled:opacity-50"
-              style={{ fontFamily: "var(--font-nunito),sans-serif" }}
-            >
-              <Users className="w-3.5 h-3.5" />
-              {isJoining ? "Joining…" : "Join Task"}
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); router.push("/verify"); }}
-              className="w-full flex items-center justify-center gap-1.5 text-[10px] font-semibold px-3 py-1.5 rounded-xl border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] transition-colors"
-              style={{ fontFamily: "var(--font-nunito),sans-serif" }}
-            >
-              <ShieldCheck className="w-3 h-3" />
-              Not verified? Verify with GoodDollar
-            </button>
+            {isGDVerified ? (
+              // GoodDollar verified — show Join button
+              <button
+                onClick={handleJoin}
+                disabled={isJoining}
+                className="w-full flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-[var(--brown-500)] text-[var(--cream-100)] hover:bg-[var(--brown-600)] transition-colors disabled:opacity-50"
+                style={{ fontFamily: "var(--font-nunito),sans-serif" }}
+              >
+                <Users className="w-3.5 h-3.5" />
+                {isJoining ? "Joining…" : "Join Task"}
+              </button>
+            ) : (
+              // Not GoodDollar verified — show Verify button
+              <button
+                onClick={(e) => { e.stopPropagation(); router.push("/verify"); }}
+                className="w-full flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border-2 border-[var(--brown-400)] text-[var(--brown-500)] hover:bg-[var(--brown-50)] transition-colors"
+                style={{ fontFamily: "var(--font-nunito),sans-serif" }}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Verify with GoodDollar to Join
+              </button>
+            )}
           </div>
         )}
 
-        {/* Poster action buttons — settle or close */}
+        {/* Poster action buttons */}
         {isPoster && (
           <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
             {isPast && task.status !== TaskStatus.Past && task.status !== TaskStatus.Closed && (
@@ -278,16 +281,10 @@ export default function TaskCard({ task, onView }: TaskCardProps) {
 
       {/* Bottom strip */}
       <div className="px-5 py-2 border-t border-[var(--border)] bg-[var(--bg-secondary)]/40 flex items-center justify-between">
-        <span
-          className="text-[10px] text-[var(--text-muted)]"
-          style={{ fontFamily: "var(--font-roboto),sans-serif" }}
-        >
+        <span className="text-[10px] text-[var(--text-muted)]" style={{ fontFamily: "var(--font-roboto),sans-serif" }}>
           via {VERIFICATION_METHOD_LABEL[task.verificationMethod]}
         </span>
-        <span
-          className="text-[10px] text-[var(--text-muted)]"
-          style={{ fontFamily: "var(--font-roboto),sans-serif" }}
-        >
+        <span className="text-[10px] text-[var(--text-muted)]" style={{ fontFamily: "var(--font-roboto),sans-serif" }}>
           by {shortAddress(task.poster)}
         </span>
       </div>

@@ -3,10 +3,15 @@ pragma solidity ^0.8.28;
 
 import "./WorkerReputation.sol";
 
+//GoodDollar Identity interface
+interface IGoodDollarIdentity {
+    function isWhitelisted(address user) external view returns (bool);
+}
 
 contract TaskEscrow {
 
-   
+    
+    address public constant GD_IDENTITY = 0xC361A6E67822a0EDc17D899227dd9FC50BD62F42;
 
     enum TaskStatus {
         Open,        // accepting workers, within deadline
@@ -35,7 +40,7 @@ contract TaskEscrow {
         Custom
     }
 
-    // Structs 
+    // Structs
     struct Task {
         uint256 id;
         address poster;
@@ -49,11 +54,11 @@ contract TaskEscrow {
         uint32  currentWorkers;
         uint32  approvedCount;
         uint64  deadline;
-        uint8   extensionCount;   // number of times the deadline has been extended
+        uint8   extensionCount;
         TaskStatus status;
         VerificationMethod verificationMethod;
         string  verificationRef;
-        uint256 totalEscrowed;    // G$ remaining in escrow for this task
+        uint256 totalEscrowed;
     }
 
     struct Submission {
@@ -76,13 +81,12 @@ contract TaskEscrow {
         string  verificationRef;
     }
 
-    // Constants 
+    // Constants
     uint8   public constant MAX_EXTENSIONS = 3;
     uint64  public constant MIN_EXTENSION  = 1 hours;
     uint64  public constant MAX_EXTENSION  = 30 days;
 
-    // State 
-
+    // State
     WorkerReputation public immutable reputation;
 
     address public arbitration;
@@ -96,10 +100,9 @@ contract TaskEscrow {
     mapping(uint256 => mapping(address => Submission)) public submissions;
     mapping(uint256 => address[])                      private _taskWorkers;
     mapping(uint256 => mapping(address => bool))       public hasJoined;
-    mapping(address => bool)                           public workerVerified;
     mapping(address => uint256)                        public feesCollected;
 
-    // Events 
+    // Events
     event TaskCreated(uint256 indexed taskId, address indexed poster, bool isPaid, uint256 bountyPerWorker, uint32 maxWorkers, VerificationMethod verificationMethod);
     event TaskExtended(uint256 indexed taskId, uint64 oldDeadline, uint64 newDeadline, uint8 extensionCount);
     event TaskMarkedPast(uint256 indexed taskId);
@@ -111,13 +114,11 @@ contract TaskEscrow {
     event SubmissionApproved(uint256 indexed taskId, address indexed worker, uint256 payout);
     event SubmissionRejected(uint256 indexed taskId, address indexed worker, string reason);
     event SubmissionDisputed(uint256 indexed taskId, address indexed worker);
-    event WorkerVerified(address indexed worker);
     event FeesWithdrawn(address indexed token, uint256 amount);
     event ArbitrationSet(address indexed arbitration);
 
-    // Errors 
+    // Errors
     error NotOwner();
-    error NotVerifier();
     error NotPoster();
     error NotArbitration();
     error TaskNotOpen();
@@ -140,14 +141,9 @@ contract TaskEscrow {
     error ExtensionTooShort();
     error ExtensionTooLong();
 
-    // Modifiers 
+    // Modifiers
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
-        _;
-    }
-
-    modifier onlyVerifier() {
-        if (msg.sender != verifier) revert NotVerifier();
         _;
     }
 
@@ -156,14 +152,23 @@ contract TaskEscrow {
         _;
     }
 
-    // Constructor 
-
+    // Constructor
     constructor(address _reputation, address _verifier, uint16 _platformFeeBps) {
         if (_reputation == address(0) || _verifier == address(0)) revert ZeroAddress();
         reputation     = WorkerReputation(_reputation);
         verifier       = _verifier;
         platformFeeBps = _platformFeeBps;
         owner          = msg.sender;
+    }
+
+    // Internal helpers
+
+    function _isGoodDollarVerified(address user) internal view returns (bool) {
+        try IGoodDollarIdentity(GD_IDENTITY).isWhitelisted(user) returns (bool result) {
+            return result;
+        } catch {
+            return false;
+        }
     }
 
     function _checkAndMarkPast(uint256 taskId) internal returns (bool expired) {
@@ -177,14 +182,11 @@ contract TaskEscrow {
         ) {
             t.status = TaskStatus.Past;
             emit TaskMarkedPast(taskId);
-
-            // Refund unfilled / unapproved escrow immediately on settlement
             _refundEscrow(t);
         }
         return true;
     }
 
-   
     function _refundEscrow(Task storage t) internal {
         if (!t.isPaid || t.totalEscrowed == 0) return;
         uint256 refund  = t.totalEscrowed;
@@ -194,7 +196,7 @@ contract TaskEscrow {
         emit PartialRefund(t.id, t.poster, refund);
     }
 
-   
+    //Core functions 
     function createTask(TaskParams calldata p) external returns (uint256 taskId) {
         if (p.maxWorkers == 0)             revert MaxWorkersMustBePositive();
         if (p.deadline <= block.timestamp) revert DeadlineMustBeFuture();
@@ -236,101 +238,51 @@ contract TaskEscrow {
         emit TaskCreated(taskId, msg.sender, isPaid, p.bountyPerWorker, p.maxWorkers, p.verificationMethod);
     }
 
-   
-    function extendDeadline(uint256 taskId, uint64 extraSeconds)
-        external
-        onlyPoster(taskId)
-    {
+    function joinTask(uint256 taskId) external {
+        // GoodDollar identity check
+        if (!_isGoodDollarVerified(msg.sender)) revert WorkerNotVerified();
+
         Task storage t = tasks[taskId];
 
-        // Cannot extend terminal states
+        if (_checkAndMarkPast(taskId))          revert TaskExpired();
+        if (t.currentWorkers >= t.maxWorkers)   revert TaskFull();
         if (
-            t.status == TaskStatus.Completed ||
-            t.status == TaskStatus.Cancelled ||
-            t.status == TaskStatus.Closed
+            t.status != TaskStatus.Open &&
+            t.status != TaskStatus.Extended
         ) revert TaskNotOpen();
+        if (hasJoined[taskId][msg.sender])      revert AlreadyJoined();
 
-        if (t.extensionCount >= MAX_EXTENSIONS) revert MaxExtensionsReached();
-        if (extraSeconds < MIN_EXTENSION)        revert ExtensionTooShort();
-        if (extraSeconds > MAX_EXTENSION)        revert ExtensionTooLong();
+        hasJoined[taskId][msg.sender] = true;
+        t.currentWorkers++;
+        _taskWorkers[taskId].push(msg.sender);
 
-        uint64 oldDeadline = t.deadline;
-        uint64 newDeadline = t.deadline + extraSeconds;
-
-        if (newDeadline <= uint64(block.timestamp)) revert DeadlineMustBeFuture();
-
-        // If the task was Past and we're now extending, undo the past refund
-        // is NOT possible once funds have left — so we only re-open the status.
-        TaskStatus prevStatus = t.status;
-        t.deadline        = newDeadline;
-        t.extensionCount += 1;
-
-        if (prevStatus == TaskStatus.Past) {
-            // Re-open for new workers if slots remain; otherwise InProgress
-            t.status = (t.currentWorkers < t.maxWorkers)
-                ? TaskStatus.Extended
-                : TaskStatus.InProgress;
-        } else if (prevStatus == TaskStatus.Open) {
-            t.status = TaskStatus.Extended;
+        if (t.currentWorkers == t.maxWorkers) {
+            t.status = TaskStatus.InProgress;
         }
-        // Extended → Extended, InProgress → InProgress, Disputed → Disputed
 
-        emit TaskExtended(taskId, oldDeadline, newDeadline, t.extensionCount);
+        emit WorkerJoined(taskId, msg.sender);
     }
 
-    
-    function cancelTask(uint256 taskId) external onlyPoster(taskId) {
-        Task storage t = tasks[taskId];
-        _checkAndMarkPast(taskId); // settle expiry first
+    function submitProof(uint256 taskId, string calldata proofData) external {
+        if (!hasJoined[taskId][msg.sender]) revert NotJoined();
+        if (_checkAndMarkPast(taskId))       revert TaskExpired();
 
+        Submission storage sub = submissions[taskId][msg.sender];
         if (
-            t.status != TaskStatus.Open       &&
-            t.status != TaskStatus.InProgress &&
-            t.status != TaskStatus.Extended   &&
-            t.status != TaskStatus.Past
-        ) revert TaskNotOpen();
+            sub.status != SubmissionStatus.None &&
+            sub.status != SubmissionStatus.Rejected
+        ) revert AlreadySubmitted();
 
-        t.status = TaskStatus.Cancelled;
-        _refundEscrow(t);       // returns unfilled/unapproved slots' G$
-        emit TaskCancelled(taskId);
+        submissions[taskId][msg.sender] = Submission({
+            worker:          msg.sender,
+            proofData:       proofData,
+            status:          SubmissionStatus.Submitted,
+            rejectionReason: "",
+            submittedAt:     block.timestamp
+        });
+
+        emit ProofSubmitted(taskId, msg.sender, proofData);
     }
-
-    
-    function closeTask(uint256 taskId) external onlyPoster(taskId) {
-        Task storage t = tasks[taskId];
-        _checkAndMarkPast(taskId); // settle expiry first
-
-        if (t.status == TaskStatus.Closed) revert TaskAlreadyClosed();
-
-        if (
-            t.status != TaskStatus.Completed &&
-            t.status != TaskStatus.Cancelled &&
-            t.status != TaskStatus.Past
-        ) revert TaskNotCloseable();
-
-        t.status = TaskStatus.Closed;
-
-        uint256 refund = t.totalEscrowed;
-        _refundEscrow(t);
-        emit TaskClosed(taskId, refund);
-    }
-
-     function settlePastTask(uint256 taskId) external {
-       Task storage t = tasks[taskId];
-
-    // Must be a live state that has passed its deadline
-    if (
-        t.status != TaskStatus.Open     &&
-        t.status != TaskStatus.InProgress &&
-        t.status != TaskStatus.Extended
-    ) revert TaskNotOpen();
-
-    if (block.timestamp < t.deadline) revert TaskNotOpen();
-
-    t.status = TaskStatus.Past;
-    emit TaskMarkedPast(taskId);
-    _refundEscrow(t);
-   }
 
     function approveSubmission(uint256 taskId, address worker)
         external
@@ -357,7 +309,6 @@ contract TaskEscrow {
 
         if (t.approvedCount == t.maxWorkers) {
             t.status = TaskStatus.Completed;
-            // Return any rounding dust
             _refundEscrow(t);
         }
     }
@@ -378,7 +329,6 @@ contract TaskEscrow {
         hasJoined[taskId][worker] = false;
 
         if (block.timestamp < t.deadline) {
-            // Slot is now free — revert InProgress back to Open/Extended
             if (t.status == TaskStatus.InProgress) {
                 t.status = (t.extensionCount > 0) ? TaskStatus.Extended : TaskStatus.Open;
             }
@@ -388,6 +338,91 @@ contract TaskEscrow {
 
         reputation.recordCompletion(worker, taskId, false);
         emit SubmissionRejected(taskId, worker, reason);
+    }
+
+    function extendDeadline(uint256 taskId, uint64 extraSeconds)
+        external
+        onlyPoster(taskId)
+    {
+        Task storage t = tasks[taskId];
+
+        if (
+            t.status == TaskStatus.Completed ||
+            t.status == TaskStatus.Cancelled ||
+            t.status == TaskStatus.Closed
+        ) revert TaskNotOpen();
+
+        if (t.extensionCount >= MAX_EXTENSIONS) revert MaxExtensionsReached();
+        if (extraSeconds < MIN_EXTENSION)        revert ExtensionTooShort();
+        if (extraSeconds > MAX_EXTENSION)        revert ExtensionTooLong();
+
+        uint64 oldDeadline = t.deadline;
+        uint64 newDeadline = t.deadline + extraSeconds;
+
+        if (newDeadline <= uint64(block.timestamp)) revert DeadlineMustBeFuture();
+
+        TaskStatus prevStatus = t.status;
+        t.deadline        = newDeadline;
+        t.extensionCount += 1;
+
+        if (prevStatus == TaskStatus.Past) {
+            t.status = (t.currentWorkers < t.maxWorkers)
+                ? TaskStatus.Extended
+                : TaskStatus.InProgress;
+        } else if (prevStatus == TaskStatus.Open) {
+            t.status = TaskStatus.Extended;
+        }
+
+        emit TaskExtended(taskId, oldDeadline, newDeadline, t.extensionCount);
+    }
+
+    function cancelTask(uint256 taskId) external onlyPoster(taskId) {
+        Task storage t = tasks[taskId];
+        _checkAndMarkPast(taskId);
+
+        if (
+            t.status != TaskStatus.Open       &&
+            t.status != TaskStatus.InProgress &&
+            t.status != TaskStatus.Extended   &&
+            t.status != TaskStatus.Past
+        ) revert TaskNotOpen();
+
+        t.status = TaskStatus.Cancelled;
+        _refundEscrow(t);
+        emit TaskCancelled(taskId);
+    }
+
+    function closeTask(uint256 taskId) external onlyPoster(taskId) {
+        Task storage t = tasks[taskId];
+        _checkAndMarkPast(taskId);
+
+        if (t.status == TaskStatus.Closed) revert TaskAlreadyClosed();
+        if (
+            t.status != TaskStatus.Completed &&
+            t.status != TaskStatus.Cancelled &&
+            t.status != TaskStatus.Past
+        ) revert TaskNotCloseable();
+
+        t.status = TaskStatus.Closed;
+        uint256 refund = t.totalEscrowed;
+        _refundEscrow(t);
+        emit TaskClosed(taskId, refund);
+    }
+
+    function settlePastTask(uint256 taskId) external {
+        Task storage t = tasks[taskId];
+
+        if (
+            t.status != TaskStatus.Open       &&
+            t.status != TaskStatus.InProgress &&
+            t.status != TaskStatus.Extended
+        ) revert TaskNotOpen();
+
+        if (block.timestamp < t.deadline) revert TaskNotOpen();
+
+        t.status = TaskStatus.Past;
+        emit TaskMarkedPast(taskId);
+        _refundEscrow(t);
     }
 
     function raiseDispute(uint256 taskId, address worker)
@@ -406,53 +441,6 @@ contract TaskEscrow {
         );
         require(ok, "ArbitrationPool call failed");
         emit SubmissionDisputed(taskId, worker);
-    }
-
-    function joinTask(uint256 taskId) external {
-        if (!workerVerified[msg.sender]) revert WorkerNotVerified();
-
-        Task storage t = tasks[taskId];
-
-        if (_checkAndMarkPast(taskId)) revert TaskExpired();
-        if (t.currentWorkers >= t.maxWorkers) revert TaskFull();
-        if (
-            t.status != TaskStatus.Open &&
-            t.status != TaskStatus.Extended
-        ) revert TaskNotOpen();
-        if (hasJoined[taskId][msg.sender]) revert AlreadyJoined();
-
-        hasJoined[taskId][msg.sender] = true;
-        t.currentWorkers++;
-        _taskWorkers[taskId].push(msg.sender);
-
-        // All slots filled → InProgress
-        if (t.currentWorkers == t.maxWorkers) {
-            t.status = TaskStatus.InProgress;
-        }
-
-        emit WorkerJoined(taskId, msg.sender);
-    }
-
-    function submitProof(uint256 taskId, string calldata proofData) external {
-
-        if (!hasJoined[taskId][msg.sender]) revert NotJoined();
-        if (_checkAndMarkPast(taskId))       revert TaskExpired();
-
-        Submission storage sub = submissions[taskId][msg.sender];
-        if (
-            sub.status != SubmissionStatus.None &&
-            sub.status != SubmissionStatus.Rejected
-        ) revert AlreadySubmitted();
-
-        submissions[taskId][msg.sender] = Submission({
-            worker:          msg.sender,
-            proofData:       proofData,
-            status:          SubmissionStatus.Submitted,
-            rejectionReason: "",
-            submittedAt:     block.timestamp
-        });
-
-        emit ProofSubmitted(taskId, msg.sender, proofData);
     }
 
     function resolveDispute(uint256 taskId, address worker, bool inFavourOfWorker) external {
@@ -483,7 +471,6 @@ contract TaskEscrow {
                 t.status = TaskStatus.Completed;
                 _refundEscrow(t);
             } else {
-                // Return to appropriate live state based on deadline
                 t.status = (block.timestamp < t.deadline)
                     ? (t.extensionCount > 0 ? TaskStatus.Extended : TaskStatus.Open)
                     : TaskStatus.Past;
@@ -492,12 +479,7 @@ contract TaskEscrow {
         }
     }
 
-    // Admin 
-    function setWorkerVerified(address worker) external onlyVerifier {
-        workerVerified[worker] = true;
-        emit WorkerVerified(worker);
-    }
-
+    // Admin
     function setVerifier(address _verifier) external onlyOwner {
         if (_verifier == address(0)) revert ZeroAddress();
         verifier = _verifier;
@@ -521,16 +503,19 @@ contract TaskEscrow {
         emit FeesWithdrawn(token, amount);
     }
 
+    //Views
+    function isWorkerVerified(address worker) external view returns (bool) {
+        return _isGoodDollarVerified(worker);
+    }
+
     function getTask(uint256 taskId) external view returns (Task memory) {
         return tasks[taskId];
     }
-
 
     function getTaskStatus(uint256 taskId) external view returns (TaskStatus) {
         Task storage t      = tasks[taskId];
         TaskStatus   stored = t.status;
 
-        // Terminal states are never overridden by deadline
         if (
             stored == TaskStatus.Completed ||
             stored == TaskStatus.Cancelled ||
@@ -538,7 +523,6 @@ contract TaskEscrow {
             stored == TaskStatus.Disputed
         ) return stored;
 
-        // If deadline has elapsed and task is still live → Past
         if (
             block.timestamp >= t.deadline &&
             (
@@ -567,7 +551,7 @@ contract TaskEscrow {
         return _taskCounter;
     }
 
-
+    // Internal transfer helpers
     function _safeTransfer(address token, address to, uint256 amount)
         internal returns (bool)
     {

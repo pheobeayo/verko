@@ -8,11 +8,13 @@ import "../src/TaskEscrow.sol";
 
 contract Deploy is Script {
 
-    // 6% platform fee (600 basis points)
-    uint16 constant PLATFORM_FEE_BPS = 600;
+    uint16  constant PLATFORM_FEE_BPS = 600;
 
     // Real GoodDollar G$ token on Celo mainnet
     address constant GOOD_DOLLAR = 0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A;
+
+    // GoodDollar Identity contract on Celo mainnet
+    address constant GD_IDENTITY = 0xC361A6E67822a0EDc17D899227dd9FC50BD62F42;
 
     function run() external {
         uint256 deployerKey = vm.envUint("MAINNET_PRIVATE_KEY");
@@ -21,15 +23,17 @@ contract Deploy is Script {
         console.log("==============================================");
         console.log("Verko - Deploy Contracts (Celo Mainnet)");
         console.log("==============================================");
-        console.log("Deployer:   ", deployer);
-        console.log("Network:     Celo Mainnet (chain 42220)");
-        console.log("Fee:        ", PLATFORM_FEE_BPS / 100, "%");
-        console.log("G$ Token:   ", GOOD_DOLLAR);
+        console.log("Deployer:    ", deployer);
+        console.log("Network:      Celo Mainnet (chain 42220)");
+        console.log("Fee:         ", PLATFORM_FEE_BPS / 100, "%");
+        console.log("G$ Token:    ", GOOD_DOLLAR);
+        console.log("GD Identity: ", GD_IDENTITY);
+        console.log("Verification: Automatic via GoodDollar whitelist");
         console.log("----------------------------------------------");
 
         vm.startBroadcast(deployerKey);
 
-        // 1. Deploy WorkerReputation (soul-bound NFT)
+        // 1. Deploy WorkerReputation
         WorkerReputation reputation = new WorkerReputation();
         console.log("WorkerReputation deployed:", address(reputation));
 
@@ -47,16 +51,18 @@ contract Deploy is Script {
 
         vm.stopBroadcast();
 
-        // Summary
         console.log("==============================================");
         console.log("Deployment complete!");
         console.log("==============================================");
         console.log("");
+        console.log("Workers are now verified automatically via GoodDollar.");
+        console.log("No setWorkerVerified() calls needed.");
+        console.log("");
         console.log("Copy these into your frontend .env:");
         console.log("----------------------------------------------");
-        console.log("NEXT_PUBLIC_ESCROW_ADDRESS    =", address(escrow));
-        console.log("NEXT_PUBLIC_CONTRACT_ADDRESS  =", address(reputation));
-        console.log("NEXT_PUBLIC_PAYMENT_TOKEN     =", GOOD_DOLLAR);
+        console.log("NEXT_PUBLIC_ESCROW_ADDRESS   =", address(escrow));
+        console.log("NEXT_PUBLIC_CONTRACT_ADDRESS =", address(reputation));
+        console.log("NEXT_PUBLIC_PAYMENT_TOKEN    =", GOOD_DOLLAR);
         console.log("----------------------------------------------");
         console.log("");
         console.log("Verify on Celoscan:");

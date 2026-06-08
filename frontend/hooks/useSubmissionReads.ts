@@ -1,17 +1,15 @@
 import { useReadContract, useReadContracts } from "wagmi";
 import { useMemo } from "react";
 import { celo } from "viem/chains";
-import escrowJson from "@/constant/escrow.json";  
-import type { Abi } from "viem";
+import abi from "@/constant/abi.json";
 import { Submission } from "@/types/contract";
 import { CONTRACT_ADDRESSES } from "@/constant/contract/address";
 
-const abi = escrowJson as unknown as Abi;
 const CONTRACT_ADDRESS = CONTRACT_ADDRESSES.taskContract;
 
 const baseContract = {
   address: CONTRACT_ADDRESS,
-  abi,
+  abi: abi as any,
   chainId: celo.id,
 } as const;
 

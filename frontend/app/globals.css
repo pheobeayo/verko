@@ -79,6 +79,37 @@
   --animate-fade-in:      fadeIn       0.6s ease      forwards;
   --animate-arrow-bounce: arrowBounce  1.5s ease-in-out infinite;
   --animate-spin:         spin         1s  linear     infinite;
+  --color-brown-950: var(--brown-950);
+  --color-brown-900: var(--brown-900);
+  --color-brown-800: var(--brown-800);
+  --color-brown-700: var(--brown-700);
+  --color-brown-600: var(--brown-600);
+  --color-brown-500: var(--brown-500);
+  --color-brown-400: var(--brown-400);
+  --color-brown-300: var(--brown-300);
+  --color-brown-200: var(--brown-200);
+  --color-brown-100: var(--brown-100);
+  --color-brown-50:  var(--brown-50);
+
+  --color-cream-50:  var(--cream-50);
+  --color-cream-100: var(--cream-100);
+  --color-cream-200: var(--cream-200);
+  --color-cream-300: var(--cream-300);
+  --color-cream-400: var(--cream-400);
+
+  --color-gold:     var(--gold);
+  --color-success:  var(--success);
+  --color-error:    var(--error);
+
+  --color-bg-primary:   var(--bg-primary);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-bg-card:      var(--bg-card);
+  --color-border:       var(--border);
+
+  --color-text-heading:   var(--text-heading);
+  --color-text-primary:   var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted:     var(--text-muted);
 }
 
 ::-webkit-scrollbar       { width: 6px; }

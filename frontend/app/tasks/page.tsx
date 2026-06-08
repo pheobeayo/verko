@@ -13,6 +13,7 @@ import TasksGridSkeleton from "@/components/tasks/TasksGridSkeleton";
 import TasksError from "@/components/tasks/TasksError";
 import FilterBar, { type TaskFilters } from "@/components/tasks/FilterBar";
 import { VerificationBanner } from "@/components/verification/VerificationBanner";
+import { ClaimBanner }        from "@/components/verification/ClaimBanner";
 import { Task, TaskStatus } from "@/types/contract";
 import { useTasks } from "@/hooks/useTaskReads";
 
@@ -156,8 +157,7 @@ export default function TasksPage() {
 
   return (
     <div className="flex flex-col gap-6">
-
-      {/* ── Verification banner — shows only for unverified workers ── */}
+      <ClaimBanner />
       <VerificationBanner />
 
       {/* Section title */}

@@ -455,7 +455,6 @@ NEXT_PUBLIC_PAYMENT_TOKEN=0x62B8B11039FcfE5aB0C56E502b1C372A3d2a9c7A
 ### Smart Contracts (.env in verko-foundry)
 
 ```bash
-PRIVATE_KEY=0x...testnet_deployer_key
 MAINNET_PRIVATE_KEY=0x...mainnet_deployer_key
 ```
 

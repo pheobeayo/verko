@@ -12,6 +12,7 @@ import EmptyState from "@/components/tasks/EmptyState";
 import TasksGridSkeleton from "@/components/tasks/TasksGridSkeleton";
 import TasksError from "@/components/tasks/TasksError";
 import FilterBar, { type TaskFilters } from "@/components/tasks/FilterBar";
+import { VerificationBanner } from "@/components/verification/VerificationBanner";
 import { Task, TaskStatus } from "@/types/contract";
 import { useTasks } from "@/hooks/useTaskReads";
 
@@ -50,7 +51,6 @@ function Pagination({
 }: { page: number; totalPages: number; onChange: (p: number) => void }) {
   if (totalPages <= 1) return null;
 
-
   const pages: (number | "...")[] = [];
   if (totalPages <= 7) {
     for (let i = 1; i <= totalPages; i++) pages.push(i);
@@ -66,7 +66,6 @@ function Pagination({
 
   return (
     <div className="flex items-center justify-center gap-1.5 pt-2">
-      {/* Prev */}
       <button
         onClick={() => onChange(page - 1)} disabled={page === 1}
         className={`${btnBase} border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--brown-400)] hover:text-[var(--brown-500)] disabled:opacity-30 disabled:cursor-not-allowed`}
@@ -74,8 +73,6 @@ function Pagination({
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
-
-      {/* Page numbers */}
       {pages.map((p, i) =>
         p === "..." ? (
           <span key={`ellipsis-${i}`} className="w-9 h-9 flex items-center justify-center text-sm text-[var(--text-muted)]">…</span>
@@ -84,17 +81,15 @@ function Pagination({
             key={p}
             onClick={() => onChange(p as number)}
             className={`${btnBase} ${p === page
-                ? "bg-[var(--brown-500)] text-[var(--cream-100)] border-[var(--brown-500)] shadow-sm"
-                : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--brown-400)] hover:text-[var(--brown-500)]"
-              }`}
+              ? "bg-[var(--brown-500)] text-[var(--cream-100)] border-[var(--brown-500)] shadow-sm"
+              : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--brown-400)] hover:text-[var(--brown-500)]"
+            }`}
             style={{ fontFamily: "var(--font-nunito),sans-serif" }}
           >
             {p}
           </button>
         )
       )}
-
-      {/* Next */}
       <button
         onClick={() => onChange(page + 1)} disabled={page === totalPages}
         className={`${btnBase} border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--brown-400)] hover:text-[var(--brown-500)] disabled:opacity-30 disabled:cursor-not-allowed`}
@@ -107,10 +102,10 @@ function Pagination({
 }
 
 export default function TasksPage() {
-  const [filters, setFilters] = useState<TaskFilters>(DEFAULT_FILTERS);
+  const [filters, setFilters]           = useState<TaskFilters>(DEFAULT_FILTERS);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [page, setPage] = useState(1);
-  const [mounted, setMounted] = useState(false);
+  const [page, setPage]                 = useState(1);
+  const [mounted, setMounted]           = useState(false);
   const router = useRouter();
   const { isConnected, status } = useAppKitAccount();
   const { tasks, isLoading, error, refetch } = useTasks();
@@ -119,7 +114,6 @@ export default function TasksPage() {
   useEffect(() => {
     if (status !== "reconnecting" && !isConnected) router.replace("/");
   }, [isConnected, status, router]);
-
   useEffect(() => { setPage(1); }, [filters]);
 
   const filteredTasks = useMemo(() => {
@@ -132,9 +126,9 @@ export default function TasksPage() {
     if (filters.category) r = r.filter(t => t.category === filters.category);
     if (filters.paidOnly) r = r.filter(t => t.isPaid && t.bountyPerWorker > 0n);
     r.sort((a, b) => {
-      if (filters.sortBy === "bounty") return Number(b.bountyPerWorker - a.bountyPerWorker);
+      if (filters.sortBy === "bounty")   return Number(b.bountyPerWorker - a.bountyPerWorker);
       if (filters.sortBy === "deadline") return Number(a.deadline - b.deadline);
-      if (filters.sortBy === "spots") return (b.maxWorkers - b.currentWorkers) - (a.maxWorkers - a.currentWorkers);
+      if (filters.sortBy === "spots")    return (b.maxWorkers - b.currentWorkers) - (a.maxWorkers - a.currentWorkers);
       return Number(b.id - a.id);
     });
     return r;
@@ -149,7 +143,6 @@ export default function TasksPage() {
 
   const handlePageChange = (p: number) => {
     setPage(p);
-    // Scroll back to top of the grid smoothly
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -164,6 +157,9 @@ export default function TasksPage() {
   return (
     <div className="flex flex-col gap-6">
 
+      {/* ── Verification banner — shows only for unverified workers ── */}
+      <VerificationBanner />
+
       {/* Section title */}
       <div>
         <h2 className="font-bold text-xl text-[var(--text-heading)]"
@@ -177,10 +173,10 @@ export default function TasksPage() {
 
       {/* Stat cards */}
       <div className="flex flex-wrap gap-4">
-        <StatCard icon={<Zap className="w-4 h-4" />} value={openCount} label="Open tasks" color="#c47a3a" />
-        <StatCard icon={<TrendingUp className="w-4 h-4" />} value={paidCount} label="Paid tasks" color="#a78bfa" />
-        <StatCard icon={<Users className="w-4 h-4" />} value={tasks.length} label="Total on-chain" color="#34d399" />
-        <StatCard icon={<Globe className="w-4 h-4" />} value="Celo" label="Network" color="#fbbf24" />
+        <StatCard icon={<Zap        className="w-4 h-4" />} value={openCount}    label="Open tasks"     color="#c47a3a" />
+        <StatCard icon={<TrendingUp className="w-4 h-4" />} value={paidCount}    label="Paid tasks"     color="#a78bfa" />
+        <StatCard icon={<Users      className="w-4 h-4" />} value={tasks.length} label="Total on-chain" color="#34d399" />
+        <StatCard icon={<Globe      className="w-4 h-4" />} value="Celo"         label="Network"        color="#fbbf24" />
       </div>
 
       {/* Filter bar + Post button */}
@@ -220,8 +216,6 @@ export default function TasksPage() {
               <TaskCard key={task.id.toString()} task={task} onView={t => setSelectedTask(t)} />
             ))}
           </div>
-
-          {/* Pagination + result count */}
           <div className="flex flex-col items-center gap-2">
             <Pagination page={page} totalPages={totalPages} onChange={handlePageChange} />
             <p className="text-xs text-[var(--text-muted)]" style={{ fontFamily: "var(--font-roboto),sans-serif" }}>
@@ -231,7 +225,6 @@ export default function TasksPage() {
         </>
       )}
 
-      {/* Task detail drawer */}
       {mounted && createPortal(
         <TaskDetailDrawer task={selectedTask} onClose={() => setSelectedTask(null)} />,
         document.body

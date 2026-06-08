@@ -1,0 +1,23 @@
+"use client";
+
+import { createContext, useContext, type ReactNode } from "react";
+import { useGoodDollarIdentity } from "@/hooks/useGoodDollarIdentity";
+
+type IdentityContextValue = ReturnType<typeof useGoodDollarIdentity>;
+
+const IdentityContext = createContext<IdentityContextValue | null>(null);
+
+export function IdentityProvider({ children }: { children: ReactNode }) {
+  const identity = useGoodDollarIdentity();
+  return (
+    <IdentityContext.Provider value={identity}>
+      {children}
+    </IdentityContext.Provider>
+  );
+}
+
+export function useIdentityContext(): IdentityContextValue {
+  const ctx = useContext(IdentityContext);
+  if (!ctx) throw new Error("useIdentityContext must be inside <IdentityProvider>");
+  return ctx;
+}

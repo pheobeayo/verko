@@ -3,9 +3,10 @@
 import { wagmiAdapter, projectId } from '@/config'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createAppKit } from '@reown/appkit/react'
-import { celo, celoSepolia } from '@reown/appkit/networks'
+import { celo} from '@reown/appkit/networks'
 import React, { type ReactNode } from 'react'
 import { cookieToInitialState, WagmiProvider, type Config } from 'wagmi'
+import { IdentityProvider } from './IdentityContext'
 
 const queryClient = new QueryClient()
 
@@ -15,15 +16,15 @@ if (!projectId) {
 
 const metadata = {
   name: 'Verko',
-  description: 'Verko is a verified micro-task marketplace on Celo. Workers earn G$ for completing real-world tasks, verified on-chain.',
-  url: 'https://my-verko.vercel.app/',
+  description: 'Verified micro-task marketplace on Celo. Workers earn G$ for completing real-world tasks.',
+  url: 'https://verko.app',
   icons: ['https://avatars.githubusercontent.com/u/179229932'],
 }
 
 createAppKit({
   adapters: [wagmiAdapter],
   projectId,
-  networks: [celo, celoSepolia],
+  networks: [celo],
   defaultNetwork: celo,
   metadata,
   features: {
@@ -46,7 +47,9 @@ export default function ContextProvider({
   return (
     <WagmiProvider config={wagmiAdapter.wagmiConfig as Config} initialState={initialState}>
       <QueryClientProvider client={queryClient}>
-        {children}
+        <IdentityProvider>
+          {children}
+        </IdentityProvider>
       </QueryClientProvider>
     </WagmiProvider>
   )

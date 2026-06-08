@@ -1,112 +1,148 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { usePublicClient, useWalletClient, useAccount } from "wagmi";
-import { useIdentitySDK, IdentitySDK } from "@goodsdks/identity-sdk";
-import { ClaimSDK } from "@goodsdks/citizen-sdk";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useAppKitAccount } from "@reown/appkit/react";
+import { usePublicClient, useWalletClient } from "wagmi";
+import { celo } from "wagmi/chains";
+import { IdentitySDK } from "@goodsdks/citizen-sdk";
+
+const GD_ENV = "production" as const;
 
 export type IdentityStatus = "loading" | "verified" | "not_verified" | "error";
 
 export function useGoodDollarIdentity() {
-  const { address } = useAccount();
-  const publicClient = usePublicClient();
-  const { data: walletClient } = useWalletClient();
-  const identitySDKFromHook = useIdentitySDK("production");
-
-  const identitySDK = useMemo(() => {
-    if (identitySDKFromHook) return identitySDKFromHook;
-    if (!publicClient || !walletClient) return null;
-    return new (IdentitySDK as any)(publicClient, walletClient, "production");
-  }, [identitySDKFromHook, publicClient, walletClient]);
+  const { address } = useAppKitAccount();
+  const publicClient = usePublicClient({ chainId: celo.id });
+  const { data: walletClient } = useWalletClient({ chainId: celo.id });
 
   const [status, setStatus]                     = useState<IdentityStatus>("loading");
   const [fvLink, setFvLink]                     = useState<string | null>(null);
   const [isVerifying, setIsVerifying]           = useState(false);
   const [isGeneratingLink, setIsGeneratingLink] = useState(false);
 
-  // Check GoodDollar whitelist status
-  const checkVerification = async () => {
-    if (!address || !publicClient || !identitySDK || !walletClient?.account?.address) {
+  const isVerifyingRef = useRef(isVerifying);
+  isVerifyingRef.current = isVerifying;
+
+  // Check GoodDollar whitelist status 
+  const checkVerification = useCallback(async () => {
+    if (!address || !publicClient || !walletClient) {
       setStatus("not_verified");
       return;
     }
+
     try {
-      if (!isVerifying) setStatus("loading");
+      if (!isVerifyingRef.current) setStatus("loading");
 
-      const claimSDK = new ClaimSDK({
-        account: address,
-        publicClient: publicClient as any,
-        walletClient: walletClient as any,
-        identitySDK: identitySDK as any,
-        env: "production",
-      });
+      const sdk = new IdentitySDK({
+        account: address as `0x${string}`,
+        publicClient,
+        walletClient,
+        env: GD_ENV,
+      } as any);
 
-      const walletStatus = await claimSDK.getWalletClaimStatus();
+      const result = await sdk.getWhitelistedRoot(address as `0x${string}`);
 
-      if (walletStatus.status === "not_whitelisted") {
-        setStatus("not_verified");
-      } else {
+      const rawResult = result as unknown;
+      let isWhitelisted = false;
+      if (typeof rawResult === "string") {
+        isWhitelisted =
+          (rawResult as string).toLowerCase() !== "0x0000000000000000000000000000000000000000";
+      } else if (rawResult && typeof rawResult === "object") {
+        const obj = rawResult as any;
+        if ("isWhitelisted" in obj) {
+          isWhitelisted = Boolean(obj.isWhitelisted);
+        } else if ("root" in obj && typeof obj.root === "string") {
+          isWhitelisted =
+            obj.root.toLowerCase() !== "0x0000000000000000000000000000000000000000";
+        }
+      }
+
+      if (isWhitelisted) {
         setStatus("verified");
         setIsVerifying(false);
+      } else {
+        setStatus("not_verified");
       }
-    } catch (error) {
-      console.error("[Verko] Identity check failed:", error);
+    } catch (err) {
+      console.error("[Verko] Identity check failed:", err);
       setStatus("error");
     }
-  };
+  }, [address, publicClient, walletClient]);
 
-  // Generate GoodDollar face verification link 
-  const generateFVLink = async () => {
-    if (!address || !publicClient || !identitySDK || !walletClient || isGeneratingLink) return;
+  // Generate GoodDollar face verification link
+  const generateFVLink = useCallback(async () => {
+    console.log("[Verko] generateFVLink called", {
+      address,
+      hasPublicClient: !!publicClient,
+      hasWalletClient: !!walletClient,
+      isGeneratingLink,
+      chainId: celo.id,
+    });
+
+    if (!address || !publicClient || !walletClient || isGeneratingLink) {
+      console.warn("[Verko] generateFVLink aborted — missing prerequisites");
+      return;
+    }
+
     try {
       setIsGeneratingLink(true);
-      const idSDK = new (IdentitySDK as any)(publicClient, walletClient, "production");
+      console.log("[Verko] constructing IdentitySDK...");
 
-      const linkResult = await idSDK.generateFVLink(
+      const sdk = new IdentitySDK({
+        account: address as `0x${string}`,
+        publicClient,
+        walletClient,
+        env: GD_ENV,
+      } as any);
+
+      console.log("[Verko] calling sdk.generateFVLink — wallet sign prompt may appear");
+      const result = await sdk.generateFVLink(
         false,
-        `${window.location.origin}/verify`,
-        42220, // Celo mainnet
+        typeof window !== "undefined"
+          ? `${window.location.origin}/verify`
+          : undefined,
+        celo.id,
       );
 
-      const finalLink =
-        typeof linkResult === "string"
-          ? linkResult
-          : (linkResult as any)?.link ?? "";
+      console.log("[Verko] generateFVLink result:", result);
 
-      if (finalLink) {
-        setFvLink(finalLink);
+      const link =
+        typeof result === "string" ? result : ((result as any)?.link ?? null);
+
+      console.log("[Verko] extracted link:", link);
+
+      if (link) {
+        setFvLink(link);
       } else {
+        console.error("[Verko] link is null/empty — setting error");
         setStatus("error");
       }
-    } catch (e) {
-      console.error("[Verko] Failed to generate FV link:", e);
+    } catch (err) {
+      console.error("[Verko] generateFVLink failed:", err);
       setStatus("error");
     } finally {
       setIsGeneratingLink(false);
     }
-  };
+  }, [address, publicClient, walletClient, isGeneratingLink]);
 
-  // Initial check 
+  // Initial check on wallet connect
   useEffect(() => {
     checkVerification();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address, !!publicClient, !!identitySDK, !!walletClient?.account?.address]);
+  }, [checkVerification]);
 
-  // Generate link when verification flow starts 
+  // Generate link when verification flow starts
   useEffect(() => {
     if (isVerifying && !fvLink && !isGeneratingLink) {
       generateFVLink();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVerifying, !!fvLink, isGeneratingLink]);
+  }, [isVerifying, fvLink, isGeneratingLink, generateFVLink]);
 
   // Poll every 5s while verifying 
   useEffect(() => {
     if (!isVerifying || status === "verified") return;
     const interval = setInterval(checkVerification, 5000);
     return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVerifying, status]);
+  }, [isVerifying, status, checkVerification]);
 
   return {
     status,

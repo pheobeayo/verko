@@ -1,18 +1,16 @@
 "use client";
 
-import { Clock, Users, CheckCircle, AlertTriangle, RefreshCw, X, ShieldCheck } from "lucide-react";
+import { Clock, Users, CheckCircle, AlertTriangle, RefreshCw, X } from "lucide-react";
 import { Task, TaskStatus, VERIFICATION_METHOD_LABEL } from "@/types/contract";
 import {
   formatDeadline, formatGDollar, capacityPercent,
   spotsLeft, canJoin, shortAddress, isExpired, effectiveStatusLabel,
 } from "@/lib/taskUtils";
-import { useAccount, useReadContract } from "wagmi";
-import { useRouter } from "next/navigation";
-import { useCloseTask } from "@/hooks/useCloseTask";
+import { useAccount } from "wagmi";
+import { useCloseTask }      from "@/hooks/useCloseTask";
 import { useSettlePastTask } from "@/hooks/useSettlePastTask";
-import { useJoinTask } from "@/hooks/useJoinTask";
-import abi from "@/constant/abi.json";
-import { CONTRACT_ADDRESSES } from "@/constant/contract/address";
+import { useJoinTask }       from "@/hooks/useJoinTask";
+import { useIdentityContext } from "@/context/IdentityContext";
 
 interface TaskCardProps {
   task: Task;
@@ -20,14 +18,14 @@ interface TaskCardProps {
 }
 
 const STATUS_BADGE: Record<TaskStatus, { bg: string; text: string; dot: string }> = {
-  [TaskStatus.Open]:       { bg: "bg-[var(--brown-100)]",           text: "text-[var(--brown-700)]",  dot: "bg-[var(--brown-500)]"  },
-  [TaskStatus.InProgress]: { bg: "bg-[var(--cream-300)]",           text: "text-[var(--brown-800)]",  dot: "bg-[var(--brown-400)]"  },
-  [TaskStatus.Completed]:  { bg: "bg-[rgba(74,124,89,0.12)]",       text: "text-[var(--success)]",    dot: "bg-[var(--success)]"    },
-  [TaskStatus.Cancelled]:  { bg: "bg-[var(--brown-50)]",            text: "text-[var(--text-muted)]", dot: "bg-[var(--brown-300)]"  },
-  [TaskStatus.Disputed]:   { bg: "bg-[rgba(139,58,42,0.12)]",       text: "text-[var(--error)]",      dot: "bg-[var(--error)]"      },
-  [TaskStatus.Extended]:   { bg: "bg-[var(--cream-200)]",           text: "text-[var(--brown-600)]",  dot: "bg-[var(--brown-400)]"  },
-  [TaskStatus.Past]:       { bg: "bg-[var(--bg-secondary)]",        text: "text-[var(--text-muted)]", dot: "bg-[var(--brown-300)]"  },
-  [TaskStatus.Closed]:     { bg: "bg-[var(--brown-50)]",            text: "text-[var(--text-muted)]", dot: "bg-[var(--brown-200)]"  },
+  [TaskStatus.Open]:       { bg:"bg-[var(--brown-100)]",         text:"text-[var(--brown-700)]",  dot:"bg-[var(--brown-500)]"  },
+  [TaskStatus.InProgress]: { bg:"bg-[var(--cream-300)]",         text:"text-[var(--brown-800)]",  dot:"bg-[var(--brown-400)]"  },
+  [TaskStatus.Completed]:  { bg:"bg-[rgba(74,124,89,0.12)]",     text:"text-[var(--success)]",    dot:"bg-[var(--success)]"    },
+  [TaskStatus.Cancelled]:  { bg:"bg-[var(--brown-50)]",          text:"text-[var(--text-muted)]", dot:"bg-[var(--brown-300)]"  },
+  [TaskStatus.Disputed]:   { bg:"bg-[rgba(139,58,42,0.12)]",     text:"text-[var(--error)]",      dot:"bg-[var(--error)]"      },
+  [TaskStatus.Extended]:   { bg:"bg-[var(--cream-200)]",         text:"text-[var(--brown-600)]",  dot:"bg-[var(--brown-400)]"  },
+  [TaskStatus.Past]:       { bg:"bg-[var(--bg-secondary)]",      text:"text-[var(--text-muted)]", dot:"bg-[var(--brown-300)]"  },
+  [TaskStatus.Closed]:     { bg:"bg-[var(--brown-50)]",          text:"text-[var(--text-muted)]", dot:"bg-[var(--brown-200)]"  },
 };
 
 const STATUS_BAR: Record<TaskStatus, string> = {
@@ -53,8 +51,8 @@ const CATEGORY_EMOJI: Record<string, string> = {
 };
 
 export default function TaskCard({ task, onView }: TaskCardProps) {
-  const { address } = useAccount();
-  const router      = useRouter();
+  const { address }                  = useAccount();
+  const { isVerified: isGDVerified } = useIdentityContext();
 
   const pct         = capacityPercent(task);
   const spots       = spotsLeft(task);
@@ -73,15 +71,6 @@ export default function TaskCard({ task, onView }: TaskCardProps) {
 
   const isPoster = !!address && address.toLowerCase() === task.poster.toLowerCase();
 
-  // Check if wallet is GoodDollar verified
-  const { data: isGDVerified } = useReadContract({
-    address: CONTRACT_ADDRESSES.taskContract as `0x${string}`,
-    abi: abi as any,
-    functionName: "isWorkerVerified",
-    args: [address],
-    query: { enabled: !!address },
-  });
-
   const { closeTask,      isWriting: isClosing  } = useCloseTask();
   const { settlePastTask, isWriting: isSettling } = useSettlePastTask();
   const { joinTask,       isWriting: isJoining  } = useJoinTask();
@@ -89,16 +78,6 @@ export default function TaskCard({ task, onView }: TaskCardProps) {
   const handleJoin = (e: React.MouseEvent) => {
     e.stopPropagation();
     joinTask(task.id);
-  };
-
-  const handleSettle = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    settlePastTask(task.id);
-  };
-
-  const handleClose = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    closeTask(task.id);
   };
 
   return (
@@ -126,10 +105,8 @@ export default function TaskCard({ task, onView }: TaskCardProps) {
 
           {task.isPaid ? (
             <div className="shrink-0 text-right">
-              <div
-                className="text-base font-black text-[var(--brown-500)]"
-                style={{ fontFamily: "var(--font-telegraf),'Space Grotesk',sans-serif" }}
-              >
+              <div className="text-base font-black text-[var(--brown-500)]"
+                style={{ fontFamily: "var(--font-telegraf),'Space Grotesk',sans-serif" }}>
                 {formatGDollar(task.bountyPerWorker)}
               </div>
               <div className="text-[10px] text-[var(--text-muted)]" style={{ fontFamily: "var(--font-roboto),sans-serif" }}>
@@ -220,31 +197,18 @@ export default function TaskCard({ task, onView }: TaskCardProps) {
           </div>
         </div>
 
-        {/* Worker actions */}
-        {address && !isPoster && joinable && (
-          <div onClick={(e) => e.stopPropagation()} className="flex flex-col gap-2">
-            {isGDVerified ? (
-              // GoodDollar verified — show Join button
-              <button
-                onClick={handleJoin}
-                disabled={isJoining}
-                className="w-full flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-[var(--brown-500)] text-[var(--cream-100)] hover:bg-[var(--brown-600)] transition-colors disabled:opacity-50"
-                style={{ fontFamily: "var(--font-nunito),sans-serif" }}
-              >
-                <Users className="w-3.5 h-3.5" />
-                {isJoining ? "Joining…" : "Join Task"}
-              </button>
-            ) : (
-              // Not GoodDollar verified — show Verify button
-              <button
-                onClick={(e) => { e.stopPropagation(); router.push("/verify"); }}
-                className="w-full flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border-2 border-[var(--brown-400)] text-[var(--brown-500)] hover:bg-[var(--brown-50)] transition-colors"
-                style={{ fontFamily: "var(--font-nunito),sans-serif" }}
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Verify with GoodDollar to Join
-              </button>
-            )}
+        {/* Worker — Join button (only if GD verified) */}
+        {address && !isPoster && joinable && isGDVerified && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={handleJoin}
+              disabled={isJoining}
+              className="w-full flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl bg-[var(--brown-500)] text-[var(--cream-100)] hover:bg-[var(--brown-600)] transition-colors disabled:opacity-50 cursor-pointer"
+              style={{ fontFamily: "var(--font-nunito),sans-serif" }}
+            >
+              <Users className="w-3.5 h-3.5" />
+              {isJoining ? "Joining…" : "Join Task"}
+            </button>
           </div>
         )}
 
@@ -253,9 +217,9 @@ export default function TaskCard({ task, onView }: TaskCardProps) {
           <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
             {isPast && task.status !== TaskStatus.Past && task.status !== TaskStatus.Closed && (
               <button
-                onClick={handleSettle}
+                onClick={(e) => { e.stopPropagation(); settlePastTask(task.id); }}
                 disabled={isSettling}
-                className="flex-1 flex items-center justify-center gap-1 text-[10px] font-semibold px-3 py-1.5 rounded-lg border border-[var(--brown-300)] text-[var(--brown-600)] hover:bg-[var(--brown-50)] transition-colors disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-1 text-[10px] font-semibold px-3 py-1.5 rounded-lg border border-[var(--brown-300)] text-[var(--brown-600)] hover:bg-[var(--brown-50)] transition-colors disabled:opacity-50 cursor-pointer"
                 style={{ fontFamily: "var(--font-nunito),sans-serif" }}
               >
                 <RefreshCw className={`w-3 h-3 ${isSettling ? "animate-spin" : ""}`} />
@@ -266,9 +230,9 @@ export default function TaskCard({ task, onView }: TaskCardProps) {
               task.status === TaskStatus.Cancelled ||
               task.status === TaskStatus.Past) && (
               <button
-                onClick={handleClose}
+                onClick={(e) => { e.stopPropagation(); closeTask(task.id); }}
                 disabled={isClosing}
-                className="flex-1 flex items-center justify-center gap-1 text-[10px] font-semibold px-3 py-1.5 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] transition-colors disabled:opacity-50"
+                className="flex-1 flex items-center justify-center gap-1 text-[10px] font-semibold px-3 py-1.5 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--bg-secondary)] transition-colors disabled:opacity-50 cursor-pointer"
                 style={{ fontFamily: "var(--font-nunito),sans-serif" }}
               >
                 <X className="w-3 h-3" />

@@ -1,11 +1,17 @@
 "use client";
 import { useState } from "react";
 import { useAppKitAccount, useAppKit, useDisconnect } from "@reown/appkit/react";
-import { User, Shield, Trophy, Copy, ExternalLink, LogOut } from "lucide-react";
+import { useReadContract } from "wagmi";
+import { User, Shield, Trophy, Copy, ExternalLink, LogOut, Loader2 } from "lucide-react";
+import { useIdentityContext } from "@/context/IdentityContext";
+import escrowJson from "@/constant/escrow.json";
+import { CONTRACT_ADDRESSES } from "@/constant/contract/address";
+
+const REPUTATION_ADDRESS = CONTRACT_ADDRESSES.workerContract as `0x${string}`;
 
 function shortAddr(addr: string) {
   if (!addr || addr.length < 10) return addr;
-  return `${addr.slice(0,6)}…${addr.slice(-4)}`;
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
 const TIERS = [
@@ -21,8 +27,27 @@ export default function Profile() {
   const { disconnect } = useDisconnect();
   const [copied, setCopied] = useState(false);
 
-  const currentTier  = TIERS[0];
-  const approvedCount = 0;
+  const { isVerified, isLoading: isVerifyingStatus, status: verifyStatus } = useIdentityContext();
+
+  const { data: statsRaw, isLoading: isLoadingStats } = useReadContract({
+    address: REPUTATION_ADDRESS,
+    abi:     escrowJson as any,
+    functionName: "getStats",
+    args:    [address ?? "0x0000000000000000000000000000000000000000"],
+    query:   { enabled: !!address },
+  });
+
+  const stats = statsRaw as {
+    tasksCompleted: bigint;
+    tasksAttempted: bigint;
+    totalEarned:    bigint;
+    tier:           number;
+    tokenId:        bigint;
+  } | undefined;
+
+  const approvedCount    = stats ? Number(stats.tasksCompleted) : 0;
+  const currentTierIndex = stats ? Math.min(Number(stats.tier), 3) : 0;
+  const currentTier      = TIERS[currentTierIndex];
 
   function copyAddr() {
     if (!address) return;
@@ -81,24 +106,67 @@ export default function Profile() {
                   className="flex items-center gap-1 text-[0.72rem] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 hover:text-[var(--text-heading)] transition-colors">
                   <Copy className="w-3 h-3" />{copied ? "Copied!" : "Copy"}
                 </button>
-                <a href={`https://celo-sepolia.blockscout.com/address/${address}`}
+                <a href={`https://celoscan.io/address/${address}`}
                   target="_blank" rel="noreferrer"
                   className="flex items-center gap-1 text-[0.72rem] text-[var(--text-muted)] no-underline hover:text-[var(--text-heading)] transition-colors">
-                  <ExternalLink className="w-3 h-3" />Blockscout
+                  <ExternalLink className="w-3 h-3" />Celoscan
                 </a>
               </div>
+
+              {/* Badges — real status */}
               <div className="flex gap-2 flex-wrap">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.7rem] font-bold border"
-                  style={{ background:"rgba(74,124,89,0.1)", borderColor:"rgba(74,124,89,0.25)", color:"var(--success)" }}>
-                  <Shield className="w-3 h-3" />GoodDollar Verified
-                </span>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.7rem] font-bold"
-                  style={{ background:`${currentTier.color}18`, color:currentTier.color }}>
-                  <Trophy className="w-3 h-3" />{currentTier.label}
-                </span>
+                {isVerifyingStatus ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.7rem] font-bold border border-[var(--border)] text-[var(--text-muted)]">
+                    <Loader2 className="w-3 h-3 animate-spin" />Checking…
+                  </span>
+                ) : isVerified ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.7rem] font-bold border"
+                    style={{ background:"rgba(74,124,89,0.1)", borderColor:"rgba(74,124,89,0.25)", color:"var(--success)" }}>
+                    <Shield className="w-3 h-3" />GoodDollar Verified
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.7rem] font-bold border border-[var(--border)]"
+                    style={{ color:"var(--text-muted)" }}>
+                    <Shield className="w-3 h-3" />
+                    {verifyStatus === "error" ? "Verification check failed" : "Not GoodDollar Verified"}
+                  </span>
+                )}
+
+                {isLoadingStats ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.7rem] font-bold border border-[var(--border)] text-[var(--text-muted)]">
+                    <Loader2 className="w-3 h-3 animate-spin" />Loading tier…
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[0.7rem] font-bold"
+                    style={{ background:`${currentTier.color}18`, color:currentTier.color }}>
+                    <Trophy className="w-3 h-3" />{currentTier.label}
+                  </span>
+                )}
               </div>
             </div>
           </div>
+
+          {/* Stats row */}
+          {stats && (
+            <div className="mt-5 pt-4 border-t border-[var(--border)] grid grid-cols-3 gap-3">
+              {[
+                { label:"Tasks done",  value: Number(stats.tasksCompleted).toString() },
+                { label:"Tasks tried", value: Number(stats.tasksAttempted).toString() },
+                { label:"G$ earned",   value: stats.totalEarned > 0n ? (Number(stats.totalEarned) / 100).toFixed(2) : "0" },
+              ].map(s => (
+                <div key={s.label} className="text-center">
+                  <p className="font-bold text-lg text-[var(--text-heading)] leading-none"
+                    style={{ fontFamily:"var(--font-telegraf),'Space Grotesk',sans-serif" }}>
+                    {s.value}
+                  </p>
+                  <p className="text-[0.68rem] text-[var(--text-muted)] mt-0.5"
+                    style={{ fontFamily:"var(--font-roboto)" }}>
+                    {s.label}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Reputation tiers */}
@@ -112,7 +180,9 @@ export default function Profile() {
               </p>
             </div>
             <span className="text-[0.72rem] text-[var(--text-muted)]" style={{ fontFamily:"var(--font-roboto)" }}>
-              {approvedCount} approved tasks
+              {isLoadingStats
+                ? <Loader2 className="w-3 h-3 animate-spin inline" />
+                : `${approvedCount} approved tasks`}
             </span>
           </div>
 
@@ -144,7 +214,8 @@ export default function Profile() {
                     {t.desc}
                   </p>
                 </div>
-                <p className="text-[0.8rem] font-bold shrink-0" style={{ fontFamily:"var(--font-telegraf)", color:t.color }}>
+                <p className="text-[0.8rem] font-bold shrink-0"
+                  style={{ fontFamily:"var(--font-telegraf)", color:t.color }}>
                   {t.min}+
                 </p>
               </div>

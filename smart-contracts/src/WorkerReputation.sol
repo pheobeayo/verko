@@ -1,82 +1,100 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-contract WorkerReputation {
-   
-    // Types
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+
+
+contract WorkerReputation is Initializable, OwnableUpgradeable, UUPSUpgradeable {
+
+    // Types 
     struct WorkerStats {
         uint256 tasksCompleted;
-        uint256 tasksAttempted;   
-        uint256 totalEarned;      
-        uint8   tier;             
-        uint256 tokenId;         
+        uint256 tasksAttempted;
+        uint256 totalEarned;    
+        uint8   tier;
+        uint256 tokenId;        
     }
 
-   
-    // State
-    address public owner;
-    address public escrow;       
+    // State 
+
+    address public escrow;
 
     uint256 private _tokenCounter;
 
-    mapping(address => WorkerStats) public stats;
-    mapping(uint256 => address)     public tokenOwner;   
-    mapping(address => uint256)     public workerToken;  
+    string public baseTokenURI;
 
-  
-    // Events
+    mapping(address  => WorkerStats) public stats;
+    mapping(uint256  => address)     public tokenOwner;
+    mapping(address  => uint256)     public workerToken;
+
+ 
+    uint256[45] private __gap;
+
+    // Events 
     event ReputationUpdated(address indexed worker, uint256 completed, uint8 tier);
     event NFTMinted(address indexed worker, uint256 tokenId);
     event TierUpgraded(address indexed worker, uint8 newTier);
-    event EscrowSet(address indexed escrow);
+    event EscrowUpdated(address indexed oldEscrow, address indexed newEscrow);
+    event BaseTokenURISet(string uri);
 
-    
-    // Errors
-    error NotOwner();
+    // ─Errors 
     error NotEscrow();
     error NonTransferable();
     error ZeroAddress();
+    error TokenDoesNotExist();
 
-   
-    // Constructor
-    constructor() {
-        owner = msg.sender;
-    }
-
-   
-    // Modifiers
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert NotOwner();
-        _;
-    }
-
+    // Modifiers 
     modifier onlyEscrow() {
         if (msg.sender != escrow) revert NotEscrow();
         _;
     }
 
-   
-    // Admin
+    
+    function initialize(address initialOwner) external initializer {
+        if (initialOwner == address(0)) revert ZeroAddress();
+        __Ownable_init(initialOwner);
+        __UUPSUpgradeable_init();
+    }
+
+    
+    function _authorizeUpgrade(address newImplementation)
+        internal
+        override
+        onlyOwner
+    {}
+
+    
     function setEscrow(address _escrow) external onlyOwner {
         if (_escrow == address(0)) revert ZeroAddress();
+        address old = escrow;
         escrow = _escrow;
-        emit EscrowSet(_escrow);
+        emit EscrowUpdated(old, _escrow);
     }
 
    
+    function setBaseTokenURI(string calldata uri) external onlyOwner {
+        baseTokenURI = uri;
+        emit BaseTokenURISet(uri);
+    }
+
+    
     function recordCompletion(
         address worker,
         uint256 taskId,
-        bool    approved
+        bool    approved,
+        uint256 amount
     ) external onlyEscrow {
         WorkerStats storage s = stats[worker];
 
         s.tasksAttempted++;
         if (approved) {
             s.tasksCompleted++;
+            s.totalEarned += amount; 
         }
 
-        // Mint soul-bound NFT on first completion
+        // Mint soul-bound NFT on first approved completion
         if (s.tokenId == 0 && s.tasksCompleted >= 1) {
             _mintNFT(worker, s);
         }
@@ -91,9 +109,10 @@ contract WorkerReputation {
             emit TierUpgraded(worker, s.tier);
         }
 
-        // Suppress unused variable warning
+       
         taskId;
     }
+
 
     function getStats(address worker) external view returns (WorkerStats memory) {
         return stats[worker];
@@ -110,14 +129,38 @@ contract WorkerReputation {
     }
 
     function ownerOf(uint256 tokenId) external view returns (address) {
-        return tokenOwner[tokenId];
+        address tokenOwnerAddr = tokenOwner[tokenId];
+        if (tokenOwnerAddr == address(0)) revert TokenDoesNotExist();
+        return tokenOwnerAddr;
+    }
+
+   
+    function tokenURI(uint256 tokenId) external view returns (string memory) {
+        if (tokenOwner[tokenId] == address(0)) revert TokenDoesNotExist();
+        return string(abi.encodePacked(baseTokenURI, _toString(tokenId)));
+    }
+
+    function totalSupply() external view returns (uint256) {
+        return _tokenCounter;
     }
 
     
+    function transferFrom(address, address, uint256) external pure {
+        revert NonTransferable();
+    }
+
+    function safeTransferFrom(address, address, uint256) external pure {
+        revert NonTransferable();
+    }
+
+    function safeTransferFrom(address, address, uint256, bytes calldata) external pure {
+        revert NonTransferable();
+    }
+
     function _mintNFT(address worker, WorkerStats storage s) internal {
         uint256 id = ++_tokenCounter;
-        s.tokenId = id;
-        tokenOwner[id] = worker;
+        s.tokenId           = id;
+        tokenOwner[id]      = worker;
         workerToken[worker] = id;
         emit NFTMinted(worker, id);
     }
@@ -137,7 +180,17 @@ contract WorkerReputation {
     }
 
     
-    function transferFrom(address, address, uint256) external pure {
-        revert NonTransferable();
+    function _toString(uint256 value) internal pure returns (string memory) {
+        if (value == 0) return "0";
+        uint256 temp = value;
+        uint256 digits;
+        while (temp != 0) { digits++; temp /= 10; }
+        bytes memory buffer = new bytes(digits);
+        while (value != 0) {
+            digits--;
+            buffer[digits] = bytes1(uint8(48 + (value % 10)));
+            value /= 10;
+        }
+        return string(buffer);
     }
 }

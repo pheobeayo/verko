@@ -1,5 +1,5 @@
 import { useWriteContract, useWaitForTransactionReceipt, useChainId } from "wagmi";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { BaseError } from "viem";
 import { celo } from "viem/chains";
 import { toast } from "sonner";
@@ -7,9 +7,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import abi from "@/constant/abi.json";
 import { CONTRACT_ADDRESSES } from "@/constant/contract/address";
 
-const CONTRACT_ADDRESS = CONTRACT_ADDRESSES.taskContract;
+const CONTRACT_ADDRESS = CONTRACT_ADDRESSES.taskContract as `0x${string}`;
 
-export function useExtendDeadline() {
+
+export function useAcceptGDIdentity() {
   const toastShownRef = useRef<string | null>(null);
   const queryClient   = useQueryClient();
   const chainId       = useChainId();
@@ -22,37 +23,45 @@ export function useExtendDeadline() {
     toastShownRef.current = writeContract.data;
     queryClient.invalidateQueries({ queryKey: ["readContract"] });
     queryClient.invalidateQueries({ queryKey: ["readContracts"] });
-    toast.success("Deadline extended successfully", { position: "top-center" });
+    toast.success(
+      "GD Identity updated successfully.",
+      { position: "top-center" },
+    );
   }, [receipt.isSuccess, writeContract.data, queryClient]);
 
-  const extendDeadline = async (taskId: bigint | number, extraSeconds: number) => {
+  const acceptGDIdentity = useCallback(async () => {
     try {
       if (chainId !== celo.id) {
         toast.error("Please switch to Celo network", { position: "top-center" });
         return;
       }
-      toast.info("Please confirm the transaction in your wallet", { position: "top-center" });
+      toast.info("Accepting GD Identity update — please confirm in your wallet", {
+        position: "top-center",
+      });
       return await writeContract.mutateAsync({
         address: CONTRACT_ADDRESS,
         abi: abi as any,
-        functionName: "extendDeadline",
-        args: [BigInt(taskId), BigInt(extraSeconds)],
+        functionName: "acceptGDIdentity",
+        args: [],
         chainId: celo.id,
       });
     } catch (error) {
       const message =
         error instanceof BaseError ? error.shortMessage
         : error instanceof Error  ? error.message
-        : "Failed to extend deadline";
+        : "Failed to accept GD Identity";
       toast.error(message, { position: "top-center" });
       throw error;
     }
-  };
+  }, [chainId, writeContract.mutateAsync]);
 
-  const reset = () => { writeContract.reset(); toastShownRef.current = null; };
+  const reset = useCallback(() => {
+    writeContract.reset();
+    toastShownRef.current = null;
+  }, [writeContract.reset]);
 
   return {
-    extendDeadline,
+    acceptGDIdentity,
     isWriting:    writeContract.isPending,
     isConfirming: receipt.isLoading,
     isSuccess:    receipt.isSuccess,

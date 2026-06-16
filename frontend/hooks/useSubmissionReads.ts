@@ -44,10 +44,7 @@ export function useSubmissions(
 
   const { data, isLoading, error, refetch } = useReadContracts({
     contracts,
-    query: {
-      enabled: pairs.length > 0,
-      staleTime: 10_000,
-    },
+    query: { enabled: pairs.length > 0, staleTime: 10_000 },
   });
 
   const submissions = useMemo<Submission[]>(() => {
@@ -93,10 +90,7 @@ export function useTaskSubmissions(taskId: bigint | number | undefined) {
     refetch: refetchSubmissions,
   } = useReadContracts({
     contracts,
-    query: {
-      enabled: contracts.length > 0,
-      staleTime: 10_000,
-    },
+    query: { enabled: contracts.length > 0, staleTime: 10_000 },
   });
 
   const submissions = useMemo<Submission[]>(() => {

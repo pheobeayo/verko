@@ -28,13 +28,13 @@ export function useSettlePastTask() {
   const settlePastTask = async (taskId: bigint | number) => {
     try {
       if (chainId !== celo.id) {
-        toast.error("Please switch to Celo Sepolia", { position: "top-center" });
+        toast.error("Please switch to Celo network", { position: "top-center" });
         return;
       }
       toast.info("Please confirm the transaction in your wallet", { position: "top-center" });
       return await writeContract.mutateAsync({
         address: CONTRACT_ADDRESS,
-        abi,
+        abi: abi as any,
         functionName: "settlePastTask",
         args: [BigInt(taskId)],
         chainId: celo.id,

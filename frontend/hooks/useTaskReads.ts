@@ -7,7 +7,6 @@ import { Task } from "@/types/contract";
 import { CONTRACT_ADDRESSES } from "@/constant/contract/address";
 
 const abi = abiJson as Abi;
-
 const CONTRACT_ADDRESS = CONTRACT_ADDRESSES.taskContract;
 
 const baseContract = {
@@ -15,7 +14,6 @@ const baseContract = {
   abi,
   chainId: celo.id,
 } as const;
-
 
 export function useTaskCount() {
   return useReadContract({
@@ -36,6 +34,7 @@ export function useTask(taskId: bigint | number | undefined) {
     query: {
       enabled: taskId !== undefined,
       staleTime: 10_000,
+      // getTask() now returns live effective status (FIX-7 applied in contract)
       select: (data) => data as unknown as Task,
     },
   });
@@ -51,7 +50,6 @@ export function useTasks() {
 
   const contracts = useMemo(() => {
     if (count === 0) return [];
-    // Tasks assumed 1-indexed. Change to BigInt(i) if your contract starts at 0.
     return Array.from({ length: count }, (_, i) => ({
       ...baseContract,
       functionName: "getTask" as const,
@@ -89,4 +87,54 @@ export function useTasks() {
       await refetchTasks();
     },
   };
+}
+
+// Read platform fee bps from contract (used by useCreateTask)
+export function usePlatformFeeBps() {
+  return useReadContract({
+    ...baseContract,
+    functionName: "platformFeeBps",
+    query: {
+      staleTime: 60_000,
+      select: (data) => data as bigint,
+    },
+  });
+}
+
+// Read current GD identity address from contract
+export function useGDIdentity() {
+  return useReadContract({
+    ...baseContract,
+    functionName: "gdIdentity",
+    query: {
+      staleTime: 60_000,
+      select: (data) => data as `0x${string}`,
+    },
+  });
+}
+
+// Read pending GD identity proposal
+export function usePendingGDIdentity() {
+  return useReadContract({
+    ...baseContract,
+    functionName: "pendingGDIdentity",
+    query: {
+      staleTime: 30_000,
+      select: (data) => data as `0x${string}`,
+    },
+  });
+}
+
+// Check if a worker is GoodDollar verified on-chain
+export function useIsWorkerVerified(worker: `0x${string}` | undefined) {
+  return useReadContract({
+    ...baseContract,
+    functionName: "isWorkerVerified",
+    args: worker ? [worker] : undefined,
+    query: {
+      enabled: !!worker,
+      staleTime: 30_000,
+      select: (data) => data as boolean,
+    },
+  });
 }

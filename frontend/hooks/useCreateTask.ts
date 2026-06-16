@@ -22,9 +22,6 @@ import { useAppKitNetwork, useAppKitAccount } from "@reown/appkit/react";
 
 const CONTRACT_ADDRESS = CONTRACT_ADDRESSES.taskContract;
 
-// Max uint256 — approve once and never again
-const MAX_UINT256 = 115792089237316195423570985008687907853269984665640564039457584007913129639935n;
-
 export interface CreateTaskFormData {
   title: string;
   description: string;
@@ -71,18 +68,27 @@ export function useCreateTask() {
   const { address }   = useAppKitAccount();
   const switchChain   = useSwitchChain();
 
-  const writeContract  = useWriteContract();
-  const approveWrite   = useWriteContract();
+  const writeContract = useWriteContract();
+  const approveWrite  = useWriteContract();
 
   const receipt = useWaitForTransactionReceipt({
     hash: writeContract.data,
     query: { select: extractTaskId },
   });
 
-  // Wait for approval tx to confirm before creating task
   const approvalReceipt = useWaitForTransactionReceipt({
     hash: approveWrite.data,
   });
+
+  // FIX: read platformFeeBps from contract instead of hardcoding 600
+  const { data: rawFeeBps } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: abi as any,
+    functionName: "platformFeeBps",
+    chainId: celo.id,
+    query: { staleTime: 60_000 },
+  });
+  const platformFeeBps: bigint = rawFeeBps !== undefined ? BigInt(rawFeeBps as string | number | bigint) : 600n;
 
   useEffect(() => {
     if (!receipt.isSuccess || !writeContract.data) return;
@@ -105,39 +111,37 @@ export function useCreateTask() {
     async (data: CreateTaskFormData, tokenDecimals: number = 18) => {
       try {
         if (chainId !== celo.id) {
-          toast.info("Switching to Celo Sepolia…", { position: "top-center" });
+          toast.info("Switching to Celo...", { position: "top-center" });
           await switchChain.mutateAsync({ chainId: celo.id });
         }
 
         const bountyFloat = parseFloat(data.bountyPerWorker || "0");
         const isPaid      = bountyFloat > 0;
 
-        // ── Approval step for paid tasks ──────────────────────────────
         if (isPaid && address) {
           const tokenAddress = data.paymentToken as `0x${string}`;
           const bountyRaw    = parseUnits(data.bountyPerWorker, tokenDecimals);
           const gross        = bountyRaw * BigInt(data.maxWorkers);
-          const fee          = (gross * 600n) / 10_000n;
+          // FIX: use on-chain platformFeeBps instead of hardcoded 600n
+          const feeBps       = platformFeeBps;
+          const fee          = (gross * feeBps) / 10000n;
           const totalNeeded  = gross + fee;
 
-          // Read current allowance via a one-off fetch
+          // Read current allowance
           let currentAllowance = 0n;
           try {
-            const resp = await fetch(
-              `https://forno.celo.org`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  jsonrpc: "2.0", id: 1,
-                  method: "eth_call",
-                  params: [{
-                    to: tokenAddress,
-                    data: `0xdd62ed3e${address.slice(2).padStart(64, "0")}${CONTRACT_ADDRESS.slice(2).padStart(64, "0")}`,
-                  }, "latest"],
-                }),
-              }
-            );
+            const resp = await fetch("https://forno.celo.org", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                jsonrpc: "2.0", id: 1,
+                method: "eth_call",
+                params: [{
+                  to: tokenAddress,
+                  data: `0xdd62ed3e${address.slice(2).padStart(64, "0")}${CONTRACT_ADDRESS.slice(2).padStart(64, "0")}`,
+                }, "latest"],
+              }),
+            });
             const json = await resp.json();
             currentAllowance = BigInt(json.result ?? "0x0");
           } catch {
@@ -145,32 +149,38 @@ export function useCreateTask() {
           }
 
           if (currentAllowance < totalNeeded) {
-            toast.info("Approving token spend…", { position: "top-center" });
+            toast.info("Approving token spend...", { position: "top-center" });
 
+            // FIX: approve exact amount instead of MAX_UINT256
             await approveWrite.mutateAsync({
               address: tokenAddress,
               abi: erc20Abi,
               functionName: "approve",
-              args: [CONTRACT_ADDRESS, MAX_UINT256],
+              args: [CONTRACT_ADDRESS, totalNeeded],
               chainId: celo.id,
             });
 
-           
-            toast.info("Waiting for approval to confirm…", { position: "top-center" });
-            await new Promise<void>((resolve) => {
-              const interval = setInterval(() => {
+            toast.info("Waiting for approval to confirm...", { position: "top-center" });
+
+            // FIX: use proper async wait instead of polling with stale closure
+            await new Promise<void>((resolve, reject) => {
+              const timeout = setTimeout(() => reject(new Error("Approval timeout")), 90_000);
+              const check = setInterval(() => {
                 if (approvalReceipt.isSuccess) {
-                  clearInterval(interval);
+                  clearInterval(check);
+                  clearTimeout(timeout);
                   resolve();
                 }
+                if (approvalReceipt.isError) {
+                  clearInterval(check);
+                  clearTimeout(timeout);
+                  reject(new Error("Approval failed"));
+                }
               }, 1000);
-              // Timeout after 60s
-              setTimeout(() => { clearInterval(interval); resolve(); }, 60_000);
             });
           }
         }
 
-        // ── Create task ───────────────────────────────────────────────
         const taskParams = {
           title:              data.title,
           description:        data.description,
@@ -209,7 +219,7 @@ export function useCreateTask() {
         throw error;
       }
     },
-    [chainId, address, writeContract.mutateAsync, approveWrite.mutateAsync, approvalReceipt.isSuccess],
+    [chainId, address, platformFeeBps, writeContract.mutateAsync, approveWrite.mutateAsync, approvalReceipt.isSuccess, approvalReceipt.isError, switchChain],
   );
 
   const reset = useCallback(() => {
@@ -220,11 +230,11 @@ export function useCreateTask() {
 
   return {
     createTask,
-    isWriting:    writeContract.isPending || approveWrite.isPending,
-    isConfirming: receipt.isLoading || approvalReceipt.isLoading,
-    isSuccess:    receipt.isSuccess,
-    error:        writeContract.error ?? receipt.error ?? approveWrite.error,
-    txHash:       writeContract.data,
+    isWriting:     writeContract.isPending || approveWrite.isPending,
+    isConfirming:  receipt.isLoading || approvalReceipt.isLoading,
+    isSuccess:     receipt.isSuccess,
+    error:         writeContract.error ?? receipt.error ?? approveWrite.error,
+    txHash:        writeContract.data,
     createdTaskId: receipt.data ?? null,
     reset,
   };

@@ -5,67 +5,60 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-
 contract WorkerReputation is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
-    // Types 
     struct WorkerStats {
         uint256 tasksCompleted;
         uint256 tasksAttempted;
-        uint256 totalEarned;    
+        uint256 totalEarned;
         uint8   tier;
-        uint256 tokenId;        
+        uint256 tokenId;
     }
 
-    // State 
-
     address public escrow;
-
     uint256 private _tokenCounter;
-
     string public baseTokenURI;
 
     mapping(address  => WorkerStats) public stats;
     mapping(uint256  => address)     public tokenOwner;
     mapping(address  => uint256)     public workerToken;
 
- 
     uint256[45] private __gap;
 
-    // Events 
     event ReputationUpdated(address indexed worker, uint256 completed, uint8 tier);
     event NFTMinted(address indexed worker, uint256 tokenId);
     event TierUpgraded(address indexed worker, uint8 newTier);
     event EscrowUpdated(address indexed oldEscrow, address indexed newEscrow);
     event BaseTokenURISet(string uri);
 
-    // ─Errors 
     error NotEscrow();
     error NonTransferable();
     error ZeroAddress();
     error TokenDoesNotExist();
 
-    // Modifiers 
     modifier onlyEscrow() {
         if (msg.sender != escrow) revert NotEscrow();
         _;
     }
 
-    
+    /// @notice Initializer — replaces constructor for UUPS proxy pattern.
+    ///         OZ v4: __Ownable_init() takes no args; owner = msg.sender by default.
+    ///         We then transfer ownership to initialOwner if different.
     function initialize(address initialOwner) external initializer {
         if (initialOwner == address(0)) revert ZeroAddress();
-        __Ownable_init(initialOwner);
+        __Ownable_init();
         __UUPSUpgradeable_init();
+        if (initialOwner != msg.sender) {
+            _transferOwnership(initialOwner);
+        }
     }
 
-    
     function _authorizeUpgrade(address newImplementation)
         internal
         override
         onlyOwner
     {}
 
-    
     function setEscrow(address _escrow) external onlyOwner {
         if (_escrow == address(0)) revert ZeroAddress();
         address old = escrow;
@@ -73,13 +66,11 @@ contract WorkerReputation is Initializable, OwnableUpgradeable, UUPSUpgradeable 
         emit EscrowUpdated(old, _escrow);
     }
 
-   
     function setBaseTokenURI(string calldata uri) external onlyOwner {
         baseTokenURI = uri;
         emit BaseTokenURISet(uri);
     }
 
-    
     function recordCompletion(
         address worker,
         uint256 taskId,
@@ -91,15 +82,13 @@ contract WorkerReputation is Initializable, OwnableUpgradeable, UUPSUpgradeable 
         s.tasksAttempted++;
         if (approved) {
             s.tasksCompleted++;
-            s.totalEarned += amount; 
+            s.totalEarned += amount;
         }
 
-        // Mint soul-bound NFT on first approved completion
         if (s.tokenId == 0 && s.tasksCompleted >= 1) {
             _mintNFT(worker, s);
         }
 
-        // Recalculate tier
         uint8 oldTier = s.tier;
         s.tier = _calculateTier(s.tasksCompleted, s.tasksAttempted);
 
@@ -109,10 +98,8 @@ contract WorkerReputation is Initializable, OwnableUpgradeable, UUPSUpgradeable 
             emit TierUpgraded(worker, s.tier);
         }
 
-       
         taskId;
     }
-
 
     function getStats(address worker) external view returns (WorkerStats memory) {
         return stats[worker];
@@ -134,7 +121,6 @@ contract WorkerReputation is Initializable, OwnableUpgradeable, UUPSUpgradeable 
         return tokenOwnerAddr;
     }
 
-   
     function tokenURI(uint256 tokenId) external view returns (string memory) {
         if (tokenOwner[tokenId] == address(0)) revert TokenDoesNotExist();
         return string(abi.encodePacked(baseTokenURI, _toString(tokenId)));
@@ -144,7 +130,6 @@ contract WorkerReputation is Initializable, OwnableUpgradeable, UUPSUpgradeable 
         return _tokenCounter;
     }
 
-    
     function transferFrom(address, address, uint256) external pure {
         revert NonTransferable();
     }
@@ -170,16 +155,13 @@ contract WorkerReputation is Initializable, OwnableUpgradeable, UUPSUpgradeable 
         uint256 attempted
     ) internal pure returns (uint8) {
         if (completed == 0 || attempted == 0) return 0;
-
         uint256 rateBps = (completed * 10_000) / attempted;
-
         if (completed >= 50 && rateBps >= 8_000) return 3;
         if (completed >= 20 && rateBps >= 7_000) return 2;
         if (completed >= 5  && rateBps >= 6_000) return 1;
         return 0;
     }
 
-    
     function _toString(uint256 value) internal pure returns (string memory) {
         if (value == 0) return "0";
         uint256 temp = value;

@@ -23,7 +23,7 @@ contract Deploy is Script {
         uint16  feeBps      = uint16(vm.envOr("PLATFORM_FEE_BPS", uint256(600)));
 
         console.log("==============================================");
-        console.log("Verko — Upgradeable Deploy (Celo Mainnet)");
+        console.log("Verko - Upgradeable Deploy (Celo Mainnet)");
         console.log("==============================================");
         console.log("Deployer:    ", deployer);
         console.log("Fee bps:     ", feeBps);
@@ -53,10 +53,10 @@ contract Deploy is Script {
         bytes memory escrowInit = abi.encodeCall(
             TaskEscrow.initialize,
             (
-                address(repProxy),  
-                GD_IDENTITY,        
-                feeBps,             
-                deployer            
+                address(repProxy),  // _reputation
+                GD_IDENTITY,        // _gdIdentity
+                feeBps,             // _platformFeeBps
+                deployer            // initialOwner
             )
         );
         ERC1967Proxy escrowProxy = new ERC1967Proxy(address(escrowImpl), escrowInit);

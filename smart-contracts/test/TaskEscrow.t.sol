@@ -3,61 +3,96 @@ pragma solidity ^0.8.28;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
+import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "../src/TaskEscrow.sol";
 import "../src/WorkerReputation.sol";
 import "../src/MockERC20.sol";
 
 contract TaskEscrowTest is Test {
 
-    // ── Constants ─────────────────────────────────────────────────────────
-    uint16  constant FEE_BPS    = 600;
-    uint256 constant ONE_DAY    = 86_400;
-    uint256 constant ONE_HOUR   = 3_600;
-    uint256 constant ONE_WEEK   = 7 * ONE_DAY;
-    uint256 constant BOUNTY     = 100 ether;
-    uint256 constant TOKEN_SUPPLY = 1_000_000 ether;
+    // Constants
+    uint16  constant FEE_BPS      = 600;
+    uint256 constant ONE_DAY      = 86400;
+    uint256 constant ONE_HOUR     = 3600;
+    uint256 constant ONE_WEEK     = 7 * ONE_DAY;
+    uint256 constant BOUNTY       = 100 ether;
+    uint256 constant TOKEN_SUPPLY = 1000000 ether;
 
-    // ── Contracts ─────────────────────────────────────────────────────────
+    // Contracts (proxies)
     TaskEscrow       escrow;
     WorkerReputation reputation;
     MockERC20        token;
 
-    // ── Actors ────────────────────────────────────────────────────────────
+    // Actors
     address owner    = makeAddr("owner");
     address poster   = makeAddr("poster");
     address worker1  = makeAddr("worker1");
     address worker2  = makeAddr("worker2");
     address worker3  = makeAddr("worker3");
-    address verifier = makeAddr("verifier");
     address stranger = makeAddr("stranger");
 
-    // ── Setup ─────────────────────────────────────────────────────────────
+    // Fake GoodDollar identity address — we mock isWhitelisted() on it
+    address constant GD_IDENTITY_MOCK = address(0xBEEF);
+
     function setUp() public {
         vm.startPrank(owner);
 
-        token      = new MockERC20(TOKEN_SUPPLY);
-        reputation = new WorkerReputation();
-        escrow     = new TaskEscrow(address(reputation), verifier, FEE_BPS);
+        // Deploy token
+        token = new MockERC20(TOKEN_SUPPLY);
+
+        // Deploy WorkerReputation behind a UUPS proxy
+        WorkerReputation repImpl = new WorkerReputation();
+        bytes memory repInit = abi.encodeCall(WorkerReputation.initialize, (owner));
+        ERC1967Proxy repProxy = new ERC1967Proxy(address(repImpl), repInit);
+        reputation = WorkerReputation(address(repProxy));
+
+        // Deploy TaskEscrow behind a UUPS proxy
+        // Use GD_IDENTITY_MOCK so we can mock isWhitelisted() per-test
+        TaskEscrow escrowImpl = new TaskEscrow();
+        bytes memory escrowInit = abi.encodeCall(
+            TaskEscrow.initialize,
+            (address(reputation), GD_IDENTITY_MOCK, FEE_BPS, owner)
+        );
+        ERC1967Proxy escrowProxy = new ERC1967Proxy(address(escrowImpl), escrowInit);
+        escrow = TaskEscrow(address(escrowProxy));
+
+        // Wire reputation -> escrow
         reputation.setEscrow(address(escrow));
 
         // Fund poster
-        token.transfer(poster, 50_000 ether);
+        token.transfer(poster, 50000 ether);
 
         vm.stopPrank();
 
         // Approve escrow from poster
         vm.prank(poster);
-        token.approve(address(escrow), 50_000 ether);
+        token.approve(address(escrow), 50000 ether);
 
-        // Verify workers
-        vm.startPrank(verifier);
-        escrow.setWorkerVerified(worker1);
-        escrow.setWorkerVerified(worker2);
-        escrow.setWorkerVerified(worker3);
-        vm.stopPrank();
+        // Mock GoodDollar identity: worker1, worker2, worker3 are verified
+        // stranger is NOT verified
+        vm.mockCall(
+            GD_IDENTITY_MOCK,
+            abi.encodeWithSignature("isWhitelisted(address)", worker1),
+            abi.encode(true)
+        );
+        vm.mockCall(
+            GD_IDENTITY_MOCK,
+            abi.encodeWithSignature("isWhitelisted(address)", worker2),
+            abi.encode(true)
+        );
+        vm.mockCall(
+            GD_IDENTITY_MOCK,
+            abi.encodeWithSignature("isWhitelisted(address)", worker3),
+            abi.encode(true)
+        );
+        vm.mockCall(
+            GD_IDENTITY_MOCK,
+            abi.encodeWithSignature("isWhitelisted(address)", stranger),
+            abi.encode(false)
+        );
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────
+    // Helpers
 
     function _paidParams(uint256 bounty, uint32 maxWorkers, uint64 deadline)
         internal view returns (TaskEscrow.TaskParams memory)
@@ -127,23 +162,18 @@ contract TaskEscrowTest is Test {
         escrow.rejectSubmission(taskId, worker, "Wrong format");
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // WorkerReputation
-    // ════════════════════════════════════════════════════════════════════
+    // WorkerReputation tests
 
     function test_reputation_initialState() public view {
         WorkerReputation.WorkerStats memory s = reputation.getStats(worker1);
-        uint256 completed = s.tasksCompleted;
-        uint8 tier = s.tier;
-        uint256 tokenId = s.tokenId;
-        assertEq(completed, 0);
-        assertEq(tier, 0);
-        assertEq(tokenId, 0);
+        assertEq(s.tasksCompleted, 0);
+        assertEq(s.tier, 0);
+        assertEq(s.tokenId, 0);
     }
 
     function test_reputation_onlyEscrowCanRecord() public {
         vm.expectRevert(abi.encodeWithSelector(WorkerReputation.NotEscrow.selector));
-        reputation.recordCompletion(worker1, 1, true);
+        reputation.recordCompletion(worker1, 1, true, 0);
     }
 
     function test_reputation_mintsSoulboundNFTOnFirstApproval() public {
@@ -153,11 +183,9 @@ contract TaskEscrowTest is Test {
         _approve(taskId, worker1);
 
         WorkerReputation.WorkerStats memory s = reputation.getStats(worker1);
-        uint256 completed = s.tasksCompleted;
-        uint256 tokenId = s.tokenId;
-        assertEq(completed, 1);
-        assertGt(tokenId, 0);
-        assertEq(reputation.ownerOf(tokenId), worker1);
+        assertEq(s.tasksCompleted, 1);
+        assertGt(s.tokenId, 0);
+        assertEq(reputation.ownerOf(s.tokenId), worker1);
     }
 
     function test_reputation_soulboundRevertsOnTransfer() public {
@@ -176,14 +204,12 @@ contract TaskEscrowTest is Test {
         assertEq(reputation.getTier(worker1), 1);
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // Task Creation
-    // ════════════════════════════════════════════════════════════════════
+    // Task Creation tests
 
     function test_create_paidTaskLocksEscrow() public {
         uint32 maxWorkers = 3;
         uint256 gross     = BOUNTY * maxWorkers;
-        uint256 fee       = (gross * FEE_BPS) / 10_000;
+        uint256 fee       = (gross * FEE_BPS) / 10000;
 
         uint256 posterBefore = token.balanceOf(poster);
         uint256 taskId       = _createPaid(BOUNTY, maxWorkers);
@@ -232,9 +258,7 @@ contract TaskEscrowTest is Test {
         escrow.createTask(_paidParams(BOUNTY, 0, deadline));
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // Worker Flow
-    // ════════════════════════════════════════════════════════════════════
+    // Worker Flow tests
 
     function test_worker_unverifiedCannotJoin() public {
         uint256 taskId = _createPaid(BOUNTY, 2);
@@ -294,7 +318,6 @@ contract TaskEscrowTest is Test {
         assertEq(uint8(escrow.getTask(taskId).status), uint8(TaskEscrow.TaskStatus.Open));
         assertFalse(escrow.hasJoined(taskId, worker1));
 
-        // Another worker can now join
         _join(worker3, taskId);
         assertTrue(escrow.hasJoined(taskId, worker3));
     }
@@ -326,9 +349,35 @@ contract TaskEscrowTest is Test {
         escrow.joinTask(taskId);
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // Unpaid Task Flow
-    // ════════════════════════════════════════════════════════════════════
+    // Auto-approval test (new fix)
+
+    function test_autoApproval_workerCanClaimAfterTimeout() public {
+        uint256 taskId = _createPaid(BOUNTY, 1);
+        _join(worker1, taskId);
+        _submit(worker1, taskId, "proof");
+
+        // Warp past approval timeout (7 days)
+        vm.warp(block.timestamp + 7 days + 1);
+
+        uint256 before = token.balanceOf(worker1);
+        vm.prank(worker1);
+        escrow.claimAutoApproval(taskId);
+
+        assertEq(token.balanceOf(worker1) - before, BOUNTY);
+        assertEq(uint8(escrow.getTask(taskId).status), uint8(TaskEscrow.TaskStatus.Completed));
+    }
+
+    function test_autoApproval_revertsBeforeTimeout() public {
+        uint256 taskId = _createPaid(BOUNTY, 1);
+        _join(worker1, taskId);
+        _submit(worker1, taskId, "proof");
+
+        vm.prank(worker1);
+        vm.expectRevert(abi.encodeWithSelector(TaskEscrow.ApprovalTimeoutNotReached.selector));
+        escrow.claimAutoApproval(taskId);
+    }
+
+    // Unpaid Task Flow tests
 
     function test_unpaid_completesWithoutTokenTransfer() public {
         uint256 taskId  = _createUnpaid(3);
@@ -340,13 +389,10 @@ contract TaskEscrowTest is Test {
 
         assertEq(token.balanceOf(worker1), before);
         WorkerReputation.WorkerStats memory ws = reputation.getStats(worker1);
-        uint256 completed = ws.tasksCompleted;
-        assertEq(completed, 1);
+        assertEq(ws.tasksCompleted, 1);
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // Cancellation
-    // ════════════════════════════════════════════════════════════════════
+    // Cancellation tests
 
     function test_cancel_refundsUnusedEscrow() public {
         uint256 taskId = _createPaid(BOUNTY, 3);
@@ -354,7 +400,6 @@ contract TaskEscrowTest is Test {
         _submit(worker1, taskId, "ok");
         _approve(taskId, worker1);
 
-        // 1 approved (paid out), 2 slots remaining in escrow
         uint256 posterBefore = token.balanceOf(poster);
         vm.prank(poster);
         escrow.cancelTask(taskId);
@@ -370,9 +415,7 @@ contract TaskEscrowTest is Test {
         escrow.cancelTask(taskId);
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // Extend Deadline
-    // ════════════════════════════════════════════════════════════════════
+    // Extend Deadline tests
 
     function test_extend_statusBecomesExtended() public {
         uint256 taskId = _createPaid(BOUNTY, 2);
@@ -425,7 +468,6 @@ contract TaskEscrowTest is Test {
         uint256 taskId = _createPaid(BOUNTY, 2);
         vm.warp(block.timestamp + ONE_DAY + 1);
 
-        // Status should be Past
         assertEq(
             uint8(escrow.getTaskStatus(taskId)),
             uint8(TaskEscrow.TaskStatus.Past)
@@ -453,9 +495,7 @@ contract TaskEscrowTest is Test {
         assertTrue(escrow.hasJoined(taskId, worker1));
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // Past Tasks & Partial Refunds
-    // ════════════════════════════════════════════════════════════════════
+    // Past Tasks & Partial Refunds tests
 
     function test_past_getTaskStatusReportsPastAfterDeadline() public {
         uint256 taskId = _createPaid(BOUNTY, 2);
@@ -480,7 +520,6 @@ contract TaskEscrowTest is Test {
     function test_past_partialFillRefundsRemainingOnSettlement() public {
         uint256 taskId = _createPaid(BOUNTY, 3);
 
-        // 1 worker approved, 2 slots unfilled
         _join(worker1, taskId);
         _submit(worker1, taskId, "proof");
         _approve(taskId, worker1);
@@ -490,7 +529,6 @@ contract TaskEscrowTest is Test {
         uint256 posterBefore = token.balanceOf(poster);
         escrow.settlePastTask(taskId);
 
-        // 2 unapproved slots refunded
         assertEq(token.balanceOf(poster) - posterBefore, BOUNTY * 2);
     }
 
@@ -510,9 +548,7 @@ contract TaskEscrowTest is Test {
         assertEq(token.balanceOf(poster) - posterBefore, BOUNTY * 5);
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // Close Task
-    // ════════════════════════════════════════════════════════════════════
+    // Close Task tests
 
     function test_close_completedTaskStatusClosed() public {
         uint256 taskId = _createPaid(BOUNTY, 1);
@@ -558,9 +594,7 @@ contract TaskEscrowTest is Test {
         vm.stopPrank();
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // Arbitration
-    // ════════════════════════════════════════════════════════════════════
+    // Arbitration tests
 
     function test_dispute_revertsWhenArbitrationNotSet() public {
         uint256 taskId = _createPaid(BOUNTY, 1);
@@ -572,14 +606,12 @@ contract TaskEscrowTest is Test {
         escrow.raiseDispute(taskId, worker1);
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // Platform Fees
-    // ════════════════════════════════════════════════════════════════════
+    // Platform Fee tests
 
     function test_fees_collectedOnTaskCreation() public {
         uint32  maxWorkers  = 4;
         uint256 gross       = BOUNTY * maxWorkers;
-        uint256 expectedFee = (gross * FEE_BPS) / 10_000;
+        uint256 expectedFee = (gross * FEE_BPS) / 10000;
 
         _createPaid(BOUNTY, maxWorkers);
 
@@ -589,7 +621,7 @@ contract TaskEscrowTest is Test {
     function test_fees_ownerCanWithdraw() public {
         uint32  maxWorkers  = 4;
         uint256 gross       = BOUNTY * maxWorkers;
-        uint256 expectedFee = (gross * FEE_BPS) / 10_000;
+        uint256 expectedFee = (gross * FEE_BPS) / 10000;
 
         _createPaid(BOUNTY, maxWorkers);
 
@@ -604,35 +636,50 @@ contract TaskEscrowTest is Test {
     function test_fees_nonOwnerCannotWithdraw() public {
         _createPaid(BOUNTY, 2);
         vm.prank(poster);
-        vm.expectRevert(abi.encodeWithSelector(TaskEscrow.NotOwner.selector));
+        // OwnableUpgradeable uses "Ownable: caller is not the owner"
+        vm.expectRevert("Ownable: caller is not the owner");
         escrow.withdrawFees(address(token));
     }
 
-    // ════════════════════════════════════════════════════════════════════
-    // Admin
-    // ════════════════════════════════════════════════════════════════════
-
-    function test_admin_onlyOwnerCanSetVerifier() public {
-        vm.prank(stranger);
-        vm.expectRevert(abi.encodeWithSelector(TaskEscrow.NotOwner.selector));
-        escrow.setVerifier(stranger);
-    }
+    // Admin tests
 
     function test_admin_onlyOwnerCanSetFee() public {
         vm.prank(stranger);
-        vm.expectRevert(abi.encodeWithSelector(TaskEscrow.NotOwner.selector));
+        vm.expectRevert("Ownable: caller is not the owner");
         escrow.setPlatformFee(100);
     }
 
     function test_admin_feeCannotExceed10Percent() public {
         vm.prank(owner);
-        vm.expectRevert("Fee too high");
+        vm.expectRevert(abi.encodeWithSelector(TaskEscrow.FeeTooHigh.selector));
         escrow.setPlatformFee(1001);
     }
 
-    function test_admin_onlyVerifierCanVerifyWorker() public {
+    // GD Identity timelock tests (new fix)
+
+    function test_gdIdentity_timelockEnforced() public {
+        address newIdentity = makeAddr("newIdentity");
+
+        vm.prank(owner);
+        escrow.proposeGDIdentity(newIdentity);
+
+        // Cannot accept before 2 days
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(TaskEscrow.TimelockNotExpired.selector));
+        escrow.acceptGDIdentity();
+
+        // Warp past timelock
+        vm.warp(block.timestamp + 2 days + 1);
+
+        vm.prank(owner);
+        escrow.acceptGDIdentity();
+
+        assertEq(escrow.gdIdentity(), newIdentity);
+    }
+
+    function test_gdIdentity_nonOwnerCannotPropose() public {
         vm.prank(stranger);
-        vm.expectRevert(abi.encodeWithSelector(TaskEscrow.NotVerifier.selector));
-        escrow.setWorkerVerified(stranger);
+        vm.expectRevert("Ownable: caller is not the owner");
+        escrow.proposeGDIdentity(makeAddr("x"));
     }
 }

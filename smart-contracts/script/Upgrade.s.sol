@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "../src/WorkerReputation.sol";
 import "../src/TaskEscrow.sol";
 
+
 contract Upgrade is Script {
 
     function run() external {
@@ -27,9 +28,7 @@ contract Upgrade is Script {
             TaskEscrow newImpl = new TaskEscrow();
             console.log("New TaskEscrow impl:", address(newImpl));
 
-            // Upgrade — no re-initialisation needed for pure logic upgrades.
-            // If new storage variables are added, call upgradeToAndCall() with
-            // a migration calldata instead.
+            
             TaskEscrow(escrowProxy).upgradeToAndCall(address(newImpl), "");
             console.log("TaskEscrow proxy upgraded:", escrowProxy);
         }

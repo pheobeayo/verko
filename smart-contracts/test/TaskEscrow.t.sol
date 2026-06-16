@@ -47,7 +47,6 @@ contract TaskEscrowTest is Test {
         reputation = WorkerReputation(address(repProxy));
 
         // Deploy TaskEscrow behind a UUPS proxy
-        // Use GD_IDENTITY_MOCK so we can mock isWhitelisted() per-test
         TaskEscrow escrowImpl = new TaskEscrow();
         bytes memory escrowInit = abi.encodeCall(
             TaskEscrow.initialize,
@@ -69,7 +68,6 @@ contract TaskEscrowTest is Test {
         token.approve(address(escrow), 50000 ether);
 
         // Mock GoodDollar identity: worker1, worker2, worker3 are verified
-        // stranger is NOT verified
         vm.mockCall(
             GD_IDENTITY_MOCK,
             abi.encodeWithSignature("isWhitelisted(address)", worker1),
@@ -464,8 +462,9 @@ contract TaskEscrowTest is Test {
         escrow.extendDeadline(taskId, uint64(31 * ONE_DAY));
     }
 
-    function test_extend_canReopenPastTask() public {
-        uint256 taskId = _createPaid(BOUNTY, 2);
+    function test_extend_canReopenPastUnpaidTask() public {
+        // Unpaid tasks have no escrow so they can always be extended past deadline
+        uint256 taskId = _createUnpaid(2);
         vm.warp(block.timestamp + ONE_DAY + 1);
 
         assertEq(
@@ -477,6 +476,19 @@ contract TaskEscrowTest is Test {
         escrow.extendDeadline(taskId, uint64(ONE_WEEK));
 
         assertEq(uint8(escrow.getTask(taskId).status), uint8(TaskEscrow.TaskStatus.Extended));
+    }
+
+    function test_extend_paidPastTaskRevertsWithNoEscrow() public {
+        // Paid past tasks cannot be extended once escrow is refunded (NoEscrowToExtend fix)
+        uint256 taskId = _createPaid(BOUNTY, 2);
+        vm.warp(block.timestamp + ONE_DAY + 1);
+
+        // Settle first so escrow is refunded
+        escrow.settlePastTask(taskId);
+
+        vm.prank(poster);
+        vm.expectRevert(abi.encodeWithSelector(TaskEscrow.NoEscrowToExtend.selector));
+        escrow.extendDeadline(taskId, uint64(ONE_WEEK));
     }
 
     function test_extend_nonPosterReverts() public {

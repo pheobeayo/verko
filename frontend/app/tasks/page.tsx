@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { Loader2, TrendingUp, Users, Zap, Globe, ChevronLeft, ChevronRight } from "lucide-react";
 import TaskCard from "@/components/tasks/TaskCard";
-import TaskDetailDrawer from "@/components/tasks/TaskDetailDrawer";
 import EmptyState from "@/components/tasks/EmptyState";
 import TasksGridSkeleton from "@/components/tasks/TasksGridSkeleton";
 import TasksError from "@/components/tasks/TasksError";
@@ -70,7 +68,6 @@ function Pagination({
       <button
         onClick={() => onChange(page - 1)} disabled={page === 1}
         className={`${btnBase} border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--brown-400)] hover:text-[var(--brown-500)] disabled:opacity-30 disabled:cursor-not-allowed`}
-        style={{ fontFamily: "var(--font-nunito),sans-serif" }}
       >
         <ChevronLeft className="w-4 h-4" />
       </button>
@@ -94,7 +91,6 @@ function Pagination({
       <button
         onClick={() => onChange(page + 1)} disabled={page === totalPages}
         className={`${btnBase} border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--brown-400)] hover:text-[var(--brown-500)] disabled:opacity-30 disabled:cursor-not-allowed`}
-        style={{ fontFamily: "var(--font-nunito),sans-serif" }}
       >
         <ChevronRight className="w-4 h-4" />
       </button>
@@ -103,18 +99,16 @@ function Pagination({
 }
 
 export default function TasksPage() {
-  const [filters, setFilters]           = useState<TaskFilters>(DEFAULT_FILTERS);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [page, setPage]                 = useState(1);
-  const [mounted, setMounted]           = useState(false);
-  const router = useRouter();
+  const [filters, setFilters] = useState<TaskFilters>(DEFAULT_FILTERS);
+  const [page, setPage]       = useState(1);
+  const router                = useRouter();
   const { isConnected, status } = useAppKitAccount();
   const { tasks, isLoading, error, refetch } = useTasks();
 
-  useEffect(() => { setMounted(true); }, []);
   useEffect(() => {
     if (status !== "reconnecting" && !isConnected) router.replace("/");
   }, [isConnected, status, router]);
+
   useEffect(() => { setPage(1); }, [filters]);
 
   const filteredTasks = useMemo(() => {
@@ -145,6 +139,11 @@ export default function TasksPage() {
   const handlePageChange = (p: number) => {
     setPage(p);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Navigate to task detail page instead of opening drawer
+  const handleViewTask = (task: Task) => {
+    router.push(`/tasks/${task.id.toString()}`);
   };
 
   if (status === "reconnecting" || !isConnected) {
@@ -213,7 +212,11 @@ export default function TasksPage() {
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {pagedTasks.map(task => (
-              <TaskCard key={task.id.toString()} task={task} onView={t => setSelectedTask(t)} />
+              <TaskCard
+                key={task.id.toString()}
+                task={task}
+                onView={handleViewTask}
+              />
             ))}
           </div>
           <div className="flex flex-col items-center gap-2">
@@ -223,11 +226,6 @@ export default function TasksPage() {
             </p>
           </div>
         </>
-      )}
-
-      {mounted && createPortal(
-        <TaskDetailDrawer task={selectedTask} onClose={() => setSelectedTask(null)} />,
-        document.body
       )}
     </div>
   );

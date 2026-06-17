@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, ChevronLeft, CheckCircle2, Loader2, FileText, Coins, Heart, X } from "lucide-react";
+import { ChevronRight, ChevronLeft, CheckCircle2, Loader2, FileText, Coins, Heart, ArrowLeft } from "lucide-react";
 import { TaskFormValues, VerificationMethod } from "@/types/contract";
 import { useCreateTask } from "@/hooks/useCreateTask";
 import {
@@ -22,21 +22,22 @@ function TypeCard({ type, selected, onSelect }: { type:"paid"|"volunteer"; selec
 
   return (
     <button onClick={onSelect}
-      className="w-full flex items-start gap-4 p-5 rounded-2xl border-2 text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5"
+      className="w-full flex items-start gap-3 sm:gap-5 p-4 sm:p-6 rounded-2xl border-2 text-left cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
       style={{
         borderColor: selected ? accent : "var(--border)",
         background:  selected ? (isPaid ? "var(--brown-50)" : "rgba(74,124,89,0.05)") : "var(--bg-card)",
       }}>
-      <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shrink-0"
         style={{ background: isPaid ? "var(--bg-secondary)" : "rgba(74,124,89,0.1)", color: accent }}>
-        {isPaid ? <Coins className="w-5 h-5" /> : <Heart className="w-5 h-5" />}
+        {isPaid ? <Coins className="w-6 h-6" /> : <Heart className="w-6 h-6" />}
       </div>
       <div className="flex-1">
         <p className="font-bold text-base mb-1.5 text-[var(--text-heading)]"
           style={{ fontFamily:"var(--font-telegraf),'Space Grotesk',sans-serif" }}>
           {isPaid ? "Paid Bounty" : "Volunteer Task"}
         </p>
-        <p className="text-[0.84rem] leading-relaxed text-[var(--text-muted)]" style={{ fontFamily:"var(--font-roboto)" }}>
+        <p className="text-sm leading-relaxed text-[var(--text-muted)]"
+          style={{ fontFamily:"var(--font-roboto)" }}>
           {isPaid
             ? "Workers earn G$ when their submission is approved. Bounty is locked in smart contract escrow at task creation."
             : "No G$ payment. Workers contribute for community impact and earn on-chain reputation NFT points toward higher tiers."}
@@ -57,12 +58,11 @@ export default function PostTask() {
   const { createTask, isWriting, isConfirming, isSuccess, createdTaskId, reset: resetHook } = useCreateTask();
   const submitting = isWriting || isConfirming;
 
- 
   useEffect(() => {
     if (!isSuccess) return;
-    const t = setTimeout(() => router.push("/tasks"), 2000);
+    const t = setTimeout(() => router.push(`/tasks/${createdTaskId?.toString() ?? ""}`), 2000);
     return () => clearTimeout(t);
-  }, [isSuccess, router]);
+  }, [isSuccess, createdTaskId, router]);
 
   const onChange = useCallback((key: keyof TaskFormValues, value: string | number | VerificationMethod) => {
     setValues(prev => ({ ...prev, [key]: value }));
@@ -118,64 +118,83 @@ export default function PostTask() {
   const isTypeStep = taskType === null;
 
   return (
-    <div className="flex flex-col items-center w-full pb-12 px-4 sm:px-8">
-      <div className="w-full max-w-[640px]">
+    <div className="flex flex-col w-full max-w-2xl mx-auto pb-12 gap-6">
 
-        {/* Page header */}
-        <div className="flex items-start justify-between mb-7">
-          <div>
-            <h2 className="font-bold text-[clamp(1.4rem,3vw,1.75rem)] text-[var(--text-heading)] mb-1"
-              style={{ fontFamily:"var(--font-telegraf),'Space Grotesk',sans-serif" }}>
-              {isTypeStep ? "Post a Task" : isSuccess ? "Task Created!" : STEPS[step]}
-            </h2>
-            {!isTypeStep && !isSuccess && (
-              <p className="flex items-center gap-2 text-[0.8rem] text-[var(--text-muted)]"
-                style={{ fontFamily:"var(--font-roboto)" }}>
-                {taskType === "paid" ? "💰 Paid Bounty" : "🌱 Volunteer Task"}
-                <button
-                  onClick={() => { setTaskType(null); setStep(0); setValues(DEFAULT_FORM); resetHook(); }}
-                  className="underline text-[0.75rem] text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 hover:text-[var(--text-heading)] transition-colors">
-                  Change
-                </button>
-              </p>
-            )}
+      {/* Back nav — no X button */}
+      <button
+        onClick={() => {
+          if (!isTypeStep && step > 0) { handleBack(); return; }
+          if (!isTypeStep && step === 0) { setTaskType(null); resetHook(); return; }
+          router.push("/tasks");
+        }}
+        disabled={submitting}
+        className="flex items-center gap-1.5 text-sm text-[var(--text-muted)] hover:text-[var(--text-heading)] transition-colors w-fit disabled:opacity-40"
+        style={{ fontFamily:"var(--font-nunito),sans-serif" }}
+      >
+        <ArrowLeft className="w-4 h-4" />
+        {isTypeStep
+          ? "Back to Tasks"
+          : step === 0
+          ? "Change task type"
+          : `Back to ${STEPS[step - 1]}`}
+      </button>
+
+      {/* Page title */}
+      <div>
+        <div className="text-xs font-bold uppercase tracking-widest text-[var(--brown-400)] mb-1.5"
+          style={{ fontFamily:"var(--font-nunito),sans-serif" }}>
+          {isTypeStep ? "New Task" : isSuccess ? "Done" : `Step ${step + 1} of ${STEPS.length}`}
+        </div>
+        <h1 className="font-bold text-[clamp(1.5rem,3vw,2rem)] text-[var(--text-heading)]"
+          style={{ fontFamily:"var(--font-telegraf),'Space Grotesk',sans-serif" }}>
+          {isTypeStep ? "Post a Task" : isSuccess ? "Task Created!" : STEPS[step]}
+        </h1>
+        {!isTypeStep && !isSuccess && (
+          <p className="flex items-center gap-2 text-sm text-[var(--text-muted)] mt-1"
+            style={{ fontFamily:"var(--font-roboto)" }}>
+            {taskType === "paid" ? "💰 Paid Bounty" : "🌱 Volunteer Task"}
+            <button
+              onClick={() => { setTaskType(null); setStep(0); setValues(DEFAULT_FORM); resetHook(); }}
+              className="underline text-xs text-[var(--text-muted)] bg-transparent border-none cursor-pointer p-0 hover:text-[var(--text-heading)] transition-colors">
+              Change
+            </button>
+          </p>
+        )}
+      </div>
+      {!isTypeStep && !isSuccess && <StepIndicator current={step} />}
+
+      {isSuccess ? (
+        <div className="flex flex-col items-center justify-center gap-5 py-16 text-center rounded-2xl border border-[var(--border)] bg-[var(--bg-card)]">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center"
+            style={{ background:"rgba(74,124,89,0.1)" }}>
+            <CheckCircle2 className="w-8 h-8" style={{ color:"var(--success)" }} />
           </div>
-          <button onClick={() => router.push("/tasks")}
-            className="flex items-center justify-center p-1 text-[var(--text-muted)] bg-transparent border-none cursor-pointer hover:text-[var(--text-heading)] transition-colors">
-            <X className="w-5 h-5" />
-          </button>
+          <div>
+            <p className="font-bold text-xl text-[var(--text-heading)] mb-1.5"
+              style={{ fontFamily:"var(--font-telegraf)" }}>
+              Task #{createdTaskId?.toString()} Created!
+            </p>
+            <p className="text-sm text-[var(--text-muted)]" style={{ fontFamily:"var(--font-roboto)" }}>
+              Your task is live on-chain. Taking you there now…
+            </p>
+          </div>
+          <Loader2 className="w-5 h-5 animate-spin text-[var(--brown-400)]" />
         </div>
 
-        {/* Step indicator */}
-        {!isTypeStep && !isSuccess && <StepIndicator current={step} />}
+      ) : isTypeStep ? (
+        /* Type selection — open layout, no card border */
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-[var(--text-muted)]" style={{ fontFamily:"var(--font-roboto)" }}>
+            What kind of task do you want to post?
+          </p>
+          <TypeCard type="paid"      selected={taskType === "paid"}      onSelect={() => handleSelectType("paid")} />
+          <TypeCard type="volunteer" selected={taskType === "volunteer"} onSelect={() => handleSelectType("volunteer")} />
+        </div>
 
-        {/* Card body */}
-        <div className="rounded-[20px] border border-[var(--border)] bg-[var(--bg-card)] p-5 sm:p-8 min-h-[280px]">
-          {isSuccess ? (
-            <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center"
-                style={{ background:"rgba(74,124,89,0.1)" }}>
-                <CheckCircle2 className="w-8 h-8" style={{ color:"var(--success)" }} />
-              </div>
-              <div>
-                <p className="font-bold text-xl text-[var(--text-heading)] mb-1.5"
-                  style={{ fontFamily:"var(--font-telegraf)" }}>
-                  Task #{createdTaskId?.toString()} Created!
-                </p>
-                <p className="text-sm text-[var(--text-muted)]" style={{ fontFamily:"var(--font-roboto)" }}>
-                  Your task is live on-chain. Redirecting to Tasks…
-                </p>
-              </div>
-            </div>
-          ) : isTypeStep ? (
-            <div className="flex flex-col gap-3.5">
-              <p className="text-sm text-[var(--text-muted)] mb-1" style={{ fontFamily:"var(--font-roboto)" }}>
-                What kind of task do you want to post?
-              </p>
-              <TypeCard type="paid"      selected={taskType === "paid"}      onSelect={() => handleSelectType("paid")} />
-              <TypeCard type="volunteer" selected={taskType === "volunteer"} onSelect={() => handleSelectType("volunteer")} />
-            </div>
-          ) : step === 0 ? (
+      ) : (
+        /* Form steps — card wrapper */
+        <div className="rounded-[20px] border border-[var(--border)] bg-[var(--bg-card)] p-5 sm:p-8">
+          {step === 0 ? (
             <StepTaskDetails    values={values} errors={errors} onChange={onChange} />
           ) : step === 1 ? (
             <StepPaymentWorkers values={values} errors={errors} onChange={onChange} isVolunteer={taskType === "volunteer"} />
@@ -185,46 +204,52 @@ export default function PostTask() {
             <StepReview         values={values} taskType={taskType!} />
           )}
         </div>
+      )}
 
-        {/* Footer nav */}
-        {!isSuccess && (
-          <div className="flex items-center justify-between mt-5 gap-3">
-            <button type="button" disabled={submitting}
-              onClick={isTypeStep ? () => router.push("/tasks") : step === 0 ? () => setTaskType(null) : handleBack}
-              className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-semibold border border-[var(--border)] bg-transparent text-[var(--text-secondary)] cursor-pointer transition-colors hover:bg-[var(--bg-secondary)] disabled:opacity-40"
+      {/* Footer navigation */}
+      {!isSuccess && (
+        <div className="flex items-center justify-between gap-2 sm:gap-3 pt-2">
+          {/* Left: back/cancel */}
+          <button type="button" disabled={submitting}
+            onClick={() => {
+              if (isTypeStep) { router.push("/tasks"); return; }
+              if (step === 0) { setTaskType(null); resetHook(); return; }
+              handleBack();
+            }}
+            className="flex items-center gap-1.5 px-3 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold border border-[var(--border)] bg-transparent text-[var(--text-secondary)] cursor-pointer transition-colors hover:bg-[var(--bg-secondary)] disabled:opacity-40"
+            style={{ fontFamily:"var(--font-nunito),sans-serif" }}>
+            {step > 0 && !isTypeStep && <ChevronLeft className="w-4 h-4" />}
+            {isTypeStep ? "Cancel" : step === 0 ? "← Change type" : "Back"}
+          </button>
+
+          {/* Right: continue/submit */}
+          {isTypeStep && taskType && (
+            <button type="button" onClick={() => setStep(0)}
+              className="flex items-center gap-1.5 px-4 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold cursor-pointer bg-[var(--brown-500)] text-[var(--cream-100)] hover:bg-[var(--brown-400)] transition-colors"
               style={{ fontFamily:"var(--font-nunito),sans-serif" }}>
-              {step > 0 && !isTypeStep && <ChevronLeft className="w-4 h-4" />}
-              {isTypeStep ? "Cancel" : step === 0 ? "← Type" : "Back"}
+              Continue <ChevronRight className="w-4 h-4" />
             </button>
+          )}
 
-            {isTypeStep && taskType && (
-              <button type="button" onClick={() => setStep(0)}
-                className="flex items-center gap-1.5 px-6 py-2.5 rounded-xl text-sm font-bold border-none cursor-pointer bg-[var(--brown-500)] text-[var(--cream-100)] hover:bg-[var(--brown-400)] transition-colors"
+          {!isTypeStep && (
+            step < STEPS.length - 1 ? (
+              <button type="button" onClick={handleNext}
+                className="flex items-center gap-1.5 px-4 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold cursor-pointer bg-[var(--brown-500)] text-[var(--cream-100)] hover:bg-[var(--brown-400)] transition-colors"
                 style={{ fontFamily:"var(--font-nunito),sans-serif" }}>
                 Continue <ChevronRight className="w-4 h-4" />
               </button>
-            )}
-
-            {!isTypeStep && (
-              step < STEPS.length - 1 ? (
-                <button type="button" onClick={handleNext}
-                  className="flex items-center gap-1.5 px-6 py-2.5 rounded-xl text-sm font-bold border-none cursor-pointer bg-[var(--brown-500)] text-[var(--cream-100)] hover:bg-[var(--brown-400)] transition-colors"
-                  style={{ fontFamily:"var(--font-nunito),sans-serif" }}>
-                  Continue <ChevronRight className="w-4 h-4" />
-                </button>
-              ) : (
-                <button type="button" onClick={handleSubmit} disabled={submitting}
-                  className="flex items-center gap-1.5 px-6 py-2.5 rounded-xl text-sm font-bold border-none cursor-pointer bg-[var(--brown-500)] text-[var(--cream-100)] hover:bg-[var(--brown-400)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                  style={{ fontFamily:"var(--font-nunito),sans-serif" }}>
-                  {submitting
-                    ? <><Loader2 className="w-4 h-4 animate-spin" />{isWriting ? "Confirm in wallet…" : "Confirming…"}</>
-                    : <><FileText className="w-4 h-4" />Create Task</>}
-                </button>
-              )
-            )}
-          </div>
-        )}
-      </div>
+            ) : (
+              <button type="button" onClick={handleSubmit} disabled={submitting}
+                className="flex items-center gap-1.5 px-4 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold cursor-pointer bg-[var(--brown-500)] text-[var(--cream-100)] hover:bg-[var(--brown-400)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{ fontFamily:"var(--font-nunito),sans-serif" }}>
+                {submitting
+                  ? <><Loader2 className="w-4 h-4 animate-spin" />{isWriting ? "Confirm in wallet…" : "Confirming…"}</>
+                  : <><FileText className="w-4 h-4" />Create Task</>}
+              </button>
+            )
+          )}
+        </div>
+      )}
     </div>
   );
 }

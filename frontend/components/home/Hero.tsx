@@ -11,8 +11,7 @@ const LINES = [
   { l1: "Complete tasks,", l2: "earn instantly.",    c: "var(--brown-500)" },
 ];
 
-// Hero images — cycle in sync with the headline text above.
-// Add or remove entries here to change the rotation; order matches LINES.
+
 const HERO_IMAGES = [
   "/heroImage.png",
   "/heroImageThree.png",
@@ -32,7 +31,7 @@ export default function Hero() {
   }, []);
 
   const h = LINES[idx];
-  // Reuse the image array on a loop even if it's shorter than LINES
+ 
   const heroImage = HERO_IMAGES[idx % HERO_IMAGES.length];
 
   return (
@@ -126,8 +125,7 @@ export default function Hero() {
   );
 }
 
-// Renders the rotating hero image with a soft crossfade between swaps.
-// Pass a different `src` to swap images — fully interchangeable.
+
 function HeroImageStack({ src, mobile = false }: { src: string; mobile?: boolean }) {
   return (
     <div

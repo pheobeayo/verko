@@ -1,8 +1,7 @@
 "use client";
 import Image from "next/image";
 
-/// VerkoWordMark — used inline (navbar/footer used to call this; now using
-/// the imported logo.png directly there, but kept here for any other callers).
+
 export function VerkoWordMark({ size = 32 }: { size?: number }) {
   return (
     <Image
@@ -16,12 +15,11 @@ export function VerkoWordMark({ size = 32 }: { size?: number }) {
   );
 }
 
-/// VerkoLoader — full-page loading state shown while a route/layout mounts.
-/// Uses onlyLogo.png (the icon-only mark) with a soft pulse animation.
+
 export function VerkoLoader() {
   return (
     <div
-      className="fixed inset-0 z-[999] flex flex-col items-center justify-center gap-4"
+      className="fixed inset-0 z-[999] flex items-center justify-center"
       style={{ background: "var(--bg-primary)" }}
     >
       <div className="vk-loader-pulse">
@@ -34,13 +32,6 @@ export function VerkoLoader() {
           priority
         />
       </div>
-
-      <p
-        className="text-xs font-medium tracking-wide"
-        style={{ color: "var(--text-muted)", fontFamily: "var(--font-roboto),sans-serif" }}
-      >
-        Loading…
-      </p>
 
       <style>{`
         @keyframes vk-pulse {

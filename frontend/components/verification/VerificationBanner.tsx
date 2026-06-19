@@ -20,39 +20,60 @@ export function VerificationBanner() {
   if (isVerified || isLoading || dismissed) return null;
   if (status === "error" && !isVerifying) return null;
 
-  // ── Collapsed pill ────────────────────────────────────────────────────
+  // Collapsed pill 
   if (!expanded) {
     return (
-      <div className="flex items-center gap-3 rounded-2xl border border-[var(--brown-200)] bg-[var(--brown-50)] p-4 transition-all duration-200">
-        {/* Icon */}
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[var(--brown-500)]">
-          <ShieldCheck size={16} strokeWidth={2.5} className="text-[var(--cream-100)]" />
+      <div className="rounded-2xl border border-[var(--brown-200)] bg-[var(--brown-50)] p-3.5 sm:p-4 transition-all duration-200">
+        <div className="flex items-start sm:items-center gap-3">
+          {/* Icon */}
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-[var(--brown-500)]">
+            <ShieldCheck size={16} strokeWidth={2.5} className="text-[var(--cream-100)]" />
+          </div>
+
+          {/* Text */}
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-bold text-[var(--text-heading)] leading-tight"
+              style={{ fontFamily: "var(--font-nunito),sans-serif" }}>
+              Verify with GoodDollar to join tasks
+            </p>
+            <p className="text-[11.5px] text-[var(--text-muted)] mt-0.5"
+              style={{ fontFamily: "var(--font-roboto),sans-serif" }}>
+              One-time face verification to prove you are a unique human.
+            </p>
+          </div>
+
+          {/* Dismiss — top row on mobile */}
+          <button
+            onClick={() => setDismissed(true)}
+            aria-label="Dismiss verification banner"
+            className="
+              flex h-7 w-7 flex-shrink-0 items-center justify-center
+              rounded-full text-[var(--text-muted)]
+              cursor-pointer
+              transition-all duration-150
+              hover:bg-[var(--brown-100)] hover:text-[var(--brown-600)]
+              active:scale-95
+              focus:outline-none focus:ring-2 focus:ring-[var(--brown-300)]
+            "
+          >
+            <X size={14} strokeWidth={2.5} />
+          </button>
         </div>
 
-        {/* Text */}
-        <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-bold text-[var(--text-heading)] leading-tight"
-            style={{ fontFamily: "var(--font-nunito),sans-serif" }}>
-            Verify with GoodDollar to join tasks
-          </p>
-          <p className="text-[11.5px] text-[var(--text-muted)] mt-0.5"
-            style={{ fontFamily: "var(--font-roboto),sans-serif" }}>
-            One-time face verification — proves you are a unique human.
-          </p>
-        </div>
-
-        {/* Verify CTA */}
+        {/* Verify CTA — full width on mobile, inline on sm+ */}
         <button
           onClick={() => { setExpanded(true); setIsVerifying(true); }}
           className="
-            inline-flex items-center gap-1.5 rounded-full
+            mt-3 sm:mt-3 sm:ml-12
+            w-full sm:w-auto
+            inline-flex items-center justify-center gap-1.5 rounded-full
             bg-[var(--brown-500)] text-[var(--cream-100)]
-            px-3.5 py-2 text-[11.5px] font-bold
-            cursor-pointer select-none flex-shrink-0
+            px-3.5 py-2.5 sm:py-2 text-[12px] sm:text-[11.5px] font-bold
+            cursor-pointer select-none
             border-2 border-transparent
             transition-all duration-150
-            hover:bg-[var(--brown-600)] hover:scale-[1.03] hover:shadow-md
-            active:scale-[0.97] active:shadow-none
+            hover:bg-[var(--brown-600)] hover:scale-[1.02] hover:shadow-md
+            active:scale-[0.98] active:shadow-none
             focus:outline-none focus:ring-2 focus:ring-[var(--brown-400)] focus:ring-offset-2
           "
           style={{ fontFamily: "var(--font-nunito),sans-serif" }}
@@ -61,30 +82,13 @@ export function VerificationBanner() {
           Verify now
           <ArrowRight size={11} strokeWidth={2.8} />
         </button>
-
-        {/* Dismiss */}
-        <button
-          onClick={() => setDismissed(true)}
-          aria-label="Dismiss verification banner"
-          className="
-            flex h-7 w-7 flex-shrink-0 items-center justify-center
-            rounded-full text-[var(--text-muted)]
-            cursor-pointer
-            transition-all duration-150
-            hover:bg-[var(--brown-100)] hover:text-[var(--brown-600)]
-            active:scale-95
-            focus:outline-none focus:ring-2 focus:ring-[var(--brown-300)]
-          "
-        >
-          <X size={14} strokeWidth={2.5} />
-        </button>
       </div>
     );
   }
 
-  // ── Expanded panel ────────────────────────────────────────────────────
+  // Expanded panel 
   return (
-    <div className="rounded-2xl border border-[var(--brown-200)] bg-[var(--bg-card)] p-5 shadow-[0_4px_16px_rgba(45,21,8,0.08)] transition-all duration-200">
+    <div className="rounded-2xl border border-[var(--brown-200)] bg-[var(--bg-card)] p-4 sm:p-5 shadow-[0_4px_16px_rgba(45,21,8,0.08)] transition-all duration-200">
 
       {/* Header */}
       <div className="flex items-start gap-3 mb-4">
@@ -92,14 +96,14 @@ export function VerificationBanner() {
           <ShieldCheck size={18} strokeWidth={2.5} className="text-[var(--cream-100)]" />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="text-[16px] font-bold text-[var(--text-heading)] leading-tight"
+          <h3 className="text-[15px] sm:text-[16px] font-bold text-[var(--text-heading)] leading-tight"
             style={{ fontFamily: "var(--font-telegraf),'Space Grotesk',sans-serif" }}>
             Verify with GoodDollar
           </h3>
-          <p className="text-[12.5px] text-[var(--text-muted)] mt-1 leading-relaxed"
+          <p className="text-[12px] sm:text-[12.5px] text-[var(--text-muted)] mt-1 leading-relaxed"
             style={{ fontFamily: "var(--font-roboto),sans-serif" }}>
             GoodDollar uses face verification to prove you are a unique human.
-            One-time setup — after verifying, you can join any task on Verko instantly.
+            One-time setup; after verifying, you can join any task on Verko instantly.
           </p>
         </div>
         <button
@@ -122,15 +126,16 @@ export function VerificationBanner() {
       {/* Link / loading / error */}
       {status === "error" ? (
         <div className="flex flex-col items-center gap-3 py-4">
-          <p className="text-xs text-[var(--text-muted)]" style={{ fontFamily: "var(--font-roboto),sans-serif" }}>
+          <p className="text-xs text-[var(--text-muted)] text-center" style={{ fontFamily: "var(--font-roboto),sans-serif" }}>
             Failed to generate verification link.
           </p>
           <button
             onClick={() => setIsVerifying(true)}
             className="
-              inline-flex items-center gap-2 rounded-xl
+              w-full sm:w-auto
+              inline-flex items-center justify-center gap-2 rounded-xl
               bg-[var(--brown-500)] text-[var(--cream-100)]
-              px-4 py-2 text-[12px] font-bold
+              px-4 py-2.5 sm:py-2 text-[12px] font-bold
               cursor-pointer
               transition-all duration-150
               hover:bg-[var(--brown-600)] hover:scale-[1.02]
@@ -144,9 +149,9 @@ export function VerificationBanner() {
           </button>
         </div>
       ) : !fvLink ? (
-        <div className="flex items-center justify-center gap-2 py-4 text-[12px] text-[var(--text-muted)]"
+        <div className="flex items-center justify-center gap-2 py-4 text-[12px] text-[var(--text-muted)] text-center"
           style={{ fontFamily: "var(--font-roboto),sans-serif" }}>
-          <Loader2 size={14} strokeWidth={2.5} className="animate-spin" />
+          <Loader2 size={14} strokeWidth={2.5} className="animate-spin shrink-0" />
           Preparing verification link…
         </div>
       ) : (
@@ -173,9 +178,9 @@ export function VerificationBanner() {
           </a>
 
           {isVerifying && (
-            <div className="flex items-center justify-center gap-2 text-[11px] text-[var(--text-muted)]"
+            <div className="flex items-center justify-center gap-2 text-[11px] text-[var(--text-muted)] text-center"
               style={{ fontFamily: "var(--font-roboto),sans-serif" }}>
-              <Loader2 size={11} strokeWidth={2.5} className="animate-spin" />
+              <Loader2 size={11} strokeWidth={2.5} className="animate-spin shrink-0" />
               Checking status… this page will update automatically once verified.
             </div>
           )}

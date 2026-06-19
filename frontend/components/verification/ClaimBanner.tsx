@@ -30,24 +30,21 @@ export function ClaimBanner() {
   const [expanded, setExpanded]   = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
-  
   if (!isVerified) return null;
-  // Hide when idle/loading, not eligible, or dismissed
   if (isLoading || status === "not_eligible" || dismissed) return null;
-  // Hide error silently — don't distract the user
   if (status === "error") return null;
 
-  
+  //  Claimed today 
   if (claimedToday) {
     return (
-      <div className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] px-4 py-3">
-        <div className="flex items-center gap-2.5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] px-3.5 sm:px-4 py-3">
+        <div className="flex items-center gap-2.5 min-w-0">
           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--success)] shrink-0">
             <CheckCircle2 size={14} strokeWidth={2.5} className="text-white" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p
-              className="text-[12px] font-bold text-[var(--text-heading)] leading-tight"
+              className="text-[12px] font-bold text-[var(--text-heading)] leading-tight truncate"
               style={{ fontFamily: "var(--font-nunito),sans-serif" }}
             >
               {status === "success" ? `Claimed ${claimable} G$ today` : "G$ claimed today ✓"}
@@ -60,7 +57,7 @@ export function ClaimBanner() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
           {txHash && (
             <a
               href={`https://celoscan.io/tx/${txHash}`}
@@ -76,7 +73,7 @@ export function ClaimBanner() {
           <button
             onClick={() => setDismissed(true)}
             aria-label="Dismiss"
-            className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--brown-100)] transition-colors cursor-pointer"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--brown-100)] transition-colors cursor-pointer shrink-0"
           >
             <X size={12} strokeWidth={2.5} />
           </button>
@@ -85,46 +82,68 @@ export function ClaimBanner() {
     );
   }
 
-  //  Can claim 
+  // Collapsed — can claim 
   if (!expanded) {
     return (
-      <div className="flex items-center gap-3 rounded-2xl border border-[var(--brown-200)] bg-[var(--brown-50)] px-4 py-3.5 transition-all duration-200">
-        {/* Icon */}
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--brown-500)] shrink-0">
-          <Coins size={16} strokeWidth={2.5} className="text-[var(--cream-100)]" />
+      <div className="rounded-2xl border border-[var(--brown-200)] bg-[var(--brown-50)] p-3.5 sm:px-4 sm:py-3.5 transition-all duration-200">
+        <div className="flex items-start sm:items-center gap-3">
+          {/* Icon */}
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--brown-500)] shrink-0">
+            <Coins size={16} strokeWidth={2.5} className="text-[var(--cream-100)]" />
+          </div>
+
+          {/* Text */}
+          <div className="flex-1 min-w-0">
+            <p
+              className="text-[13px] font-bold text-[var(--text-heading)] leading-tight"
+              style={{ fontFamily: "var(--font-nunito),sans-serif" }}
+            >
+              Your daily G$ is ready to claim
+              {claimable !== "0" && (
+                <span className="ml-1.5 text-[var(--brown-500)]">{claimable} G$</span>
+              )}
+            </p>
+            <p
+              className="text-[11.5px] text-[var(--text-muted)] mt-0.5"
+              style={{ fontFamily: "var(--font-roboto),sans-serif" }}
+            >
+              Claim your GoodDollar UBI — free every day.
+            </p>
+          </div>
+
+          {/* Expand + Dismiss — top row on mobile */}
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => setExpanded(true)}
+              aria-label="Learn more"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--brown-100)] transition-colors cursor-pointer"
+            >
+              <ChevronDown size={14} strokeWidth={2.5} />
+            </button>
+            <button
+              onClick={() => setDismissed(true)}
+              aria-label="Dismiss claim banner"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--brown-100)] transition-colors cursor-pointer"
+            >
+              <X size={14} strokeWidth={2.5} />
+            </button>
+          </div>
         </div>
 
-        {/* Text */}
-        <div className="flex-1 min-w-0">
-          <p
-            className="text-[13px] font-bold text-[var(--text-heading)] leading-tight"
-            style={{ fontFamily: "var(--font-nunito),sans-serif" }}
-          >
-            Your daily G$ is ready to claim
-            {claimable !== "0" && (
-              <span className="ml-1.5 text-[var(--brown-500)]">{claimable} G$</span>
-            )}
-          </p>
-          <p
-            className="text-[11.5px] text-[var(--text-muted)] mt-0.5"
-            style={{ fontFamily: "var(--font-roboto),sans-serif" }}
-          >
-            Claim your GoodDollar UBI — free every day.
-          </p>
-        </div>
-
-        {/* Claim CTA */}
+        {/* Claim CTA — full width on mobile, inline on sm+ */}
         <button
           onClick={claim}
           disabled={isClaiming}
           className="
-            inline-flex items-center gap-1.5 rounded-full
+            mt-3 sm:mt-0 sm:ml-12
+            w-full sm:w-auto
+            inline-flex items-center justify-center gap-1.5 rounded-full
             bg-[var(--brown-500)] text-[var(--cream-100)]
-            px-3.5 py-2 text-[11.5px] font-bold
-            cursor-pointer select-none flex-shrink-0
+            px-3.5 py-2.5 sm:py-2 text-[12px] sm:text-[11.5px] font-bold
+            cursor-pointer select-none
             transition-all duration-150
-            hover:bg-[var(--brown-600)] hover:scale-[1.03] hover:shadow-md
-            active:scale-[0.97]
+            hover:bg-[var(--brown-600)] hover:scale-[1.02] hover:shadow-md
+            active:scale-[0.98]
             focus:outline-none focus:ring-2 focus:ring-[var(--brown-400)] focus:ring-offset-2
             disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100
           "
@@ -134,31 +153,13 @@ export function ClaimBanner() {
             ? <><Loader2 size={11} className="animate-spin" /> Claiming…</>
             : <>Claim G$<Coins size={11} strokeWidth={2.5} /></>}
         </button>
-
-        {/* Expand for more info */}
-        <button
-          onClick={() => setExpanded(true)}
-          aria-label="Learn more"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--brown-100)] transition-colors cursor-pointer"
-        >
-          <ChevronDown size={14} strokeWidth={2.5} />
-        </button>
-
-        {/* Dismiss */}
-        <button
-          onClick={() => setDismissed(true)}
-          aria-label="Dismiss claim banner"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[var(--text-muted)] hover:bg-[var(--brown-100)] transition-colors cursor-pointer"
-        >
-          <X size={14} strokeWidth={2.5} />
-        </button>
       </div>
     );
   }
 
-  // Expanded panel 
+  // Expanded panel
   return (
-    <div className="rounded-2xl border border-[var(--brown-200)] bg-[var(--bg-card)] p-5 shadow-[0_4px_16px_rgba(45,21,8,0.08)]">
+    <div className="rounded-2xl border border-[var(--brown-200)] bg-[var(--bg-card)] p-4 sm:p-5 shadow-[0_4px_16px_rgba(45,21,8,0.08)]">
       {/* Header */}
       <div className="flex items-start gap-3 mb-4">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--brown-500)]">
@@ -166,13 +167,13 @@ export function ClaimBanner() {
         </div>
         <div className="flex-1 min-w-0">
           <h3
-            className="text-[16px] font-bold text-[var(--text-heading)] leading-tight"
+            className="text-[15px] sm:text-[16px] font-bold text-[var(--text-heading)] leading-tight"
             style={{ fontFamily: "var(--font-telegraf),'Space Grotesk',sans-serif" }}
           >
             Claim your daily G$
           </h3>
           <p
-            className="text-[12.5px] text-[var(--text-muted)] mt-1 leading-relaxed"
+            className="text-[12px] sm:text-[12.5px] text-[var(--text-muted)] mt-1 leading-relaxed"
             style={{ fontFamily: "var(--font-roboto),sans-serif" }}
           >
             GoodDollar is a Universal Basic Income protocol. As a verified member
@@ -191,18 +192,16 @@ export function ClaimBanner() {
 
       {/* Amount pill */}
       {claimable !== "0" && (
-        <div
-          className="flex items-center justify-center gap-3 rounded-xl p-4 mb-4 border border-[var(--brown-200)] bg-[var(--brown-50)]"
-        >
+        <div className="flex items-center justify-center gap-3 rounded-xl p-4 mb-4 border border-[var(--brown-200)] bg-[var(--brown-50)]">
           <div className="text-center">
             <p
-              className="text-[2.2rem] font-black text-[var(--brown-500)] leading-none"
+              className="text-[1.9rem] sm:text-[2.2rem] font-black text-[var(--brown-500)] leading-none"
               style={{ fontFamily: "var(--font-telegraf),'Space Grotesk',sans-serif" }}
             >
               {claimable}
             </p>
             <p
-              className="text-[12px] font-bold text-[var(--text-muted)] mt-1"
+              className="text-[11px] sm:text-[12px] font-bold text-[var(--text-muted)] mt-1"
               style={{ fontFamily: "var(--font-roboto),sans-serif" }}
             >
               G$ available today
@@ -233,8 +232,8 @@ export function ClaimBanner() {
           : <><Coins size={15} /> Claim {claimable !== "0" ? `${claimable} ` : ""}G$ now</>}
       </button>
 
-      {/* Refresh + info */}
-      <div className="mt-3 flex items-center justify-between">
+      {/* Refresh + info — stacks on mobile */}
+      <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <button
           onClick={checkStatus}
           className="inline-flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] hover:text-[var(--brown-500)] transition-colors cursor-pointer"

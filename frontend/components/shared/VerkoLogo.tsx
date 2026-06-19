@@ -1,65 +1,56 @@
 "use client";
-import { useEffect, useState } from "react";
+import Image from "next/image";
 
-interface LogoProps { size?: number; className?: string; }
-
-export function VerkoLogoMark({ size = 36, className = "" }: LogoProps) {
+/// VerkoWordMark — used inline (navbar/footer used to call this; now using
+/// the imported logo.png directly there, but kept here for any other callers).
+export function VerkoWordMark({ size = 32 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
-      <defs>
-        <linearGradient id="vk-g" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="var(--brown-400)" />
-          <stop offset="100%" stopColor="var(--brown-700)" />
-        </linearGradient>
-      </defs>
-      {/* Rounded square background */}
-      <rect width="36" height="36" rx="9" fill="url(#vk-g)" />
-      {/* Sharp V — miter join for the crisp point at the bottom */}
-      <polyline
-        points="7,10 18,26 29,10"
-        stroke="white"
-        strokeWidth="4.8"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
-        strokeMiterlimit="20"
-        fill="none"
-      />
-    </svg>
+    <Image
+      src="/logo.png"
+      alt="Verko"
+      height={size * 2}
+      width={size * 6}
+      style={{ objectFit: "contain", height: size, width: "auto" }}
+      priority
+    />
   );
 }
 
-export function VerkoWordMark({ size = 36 }: { size?: number }) {
-  return (
-    <div style={{ display:"flex", alignItems:"center", gap: size * 0.2 }}>
-      <VerkoLogoMark size={size} />
-      <span style={{
-        fontFamily: "var(--font-telegraf),'Space Grotesk',sans-serif",
-        fontWeight: 700,
-        fontSize: size * 0.55,
-        letterSpacing: "-0.03em",
-        color: "var(--text-heading)",
-        lineHeight: 1,
-      }}>Verko</span>
-    </div>
-  );
-}
-
+/// VerkoLoader — full-page loading state shown while a route/layout mounts.
+/// Uses onlyLogo.png (the icon-only mark) with a soft pulse animation.
 export function VerkoLoader() {
-  const [frame, setFrame] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setFrame(f => (f + 1) % 4), 420);
-    return () => clearInterval(t);
-  }, []);
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-4"
-      style={{ background: "var(--bg-primary)" }}>
-      <div style={{ animation: "vk-loader 1.4s ease-in-out infinite" }}>
-        <VerkoLogoMark size={52} />
+    <div
+      className="fixed inset-0 z-[999] flex flex-col items-center justify-center gap-4"
+      style={{ background: "var(--bg-primary)" }}
+    >
+      <div className="vk-loader-pulse">
+        <Image
+          src="/onlyLogo.png"
+          alt="Verko"
+          height={64}
+          width={64}
+          style={{ objectFit: "contain", height: 64, width: 64 }}
+          priority
+        />
       </div>
-      <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-telegraf)", fontSize: "0.65rem", letterSpacing: "0.18em" }}>
-        VERKO{"...".slice(0, frame)}
+
+      <p
+        className="text-xs font-medium tracking-wide"
+        style={{ color: "var(--text-muted)", fontFamily: "var(--font-roboto),sans-serif" }}
+      >
+        Loading…
       </p>
-      <style>{`@keyframes vk-loader{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.65;transform:scale(0.9)}}`}</style>
+
+      <style>{`
+        @keyframes vk-pulse {
+          0%, 100% { transform: scale(1);    opacity: 1;   }
+          50%      { transform: scale(0.88); opacity: 0.55; }
+        }
+        .vk-loader-pulse {
+          animation: vk-pulse 1.3s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 }
